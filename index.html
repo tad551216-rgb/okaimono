@@ -226,7 +226,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v1.5
+   おかいもの帖  v1.3
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -812,11 +812,12 @@ function viewShop(){
   });
   h += `</div>`;
 
-  const sum = list.filter(r=>checked.has(r.id))
-                  .reduce((a,r)=>a + ((r.id in actualIn) ? Number(actualIn[r.id])||0 : r.plan*r.qty), 0);
+  const allChecked = DB.reqs.filter(r => r.status==="reserved" && checked.has(r.id));
+  const sum = allChecked.reduce((a,r)=>a + ((r.id in actualIn) ? Number(actualIn[r.id])||0 : r.plan*r.qty), 0);
+  const outside = allChecked.filter(r => !list.some(x => x.id === r.id)).length;
   h += `<div class="stick">
     <div class="row">
-      <div class="grow"><div class="muted small">チェックずみ ${checked.size}件</div>
+      <div class="grow"><div class="muted small">チェックずみ ${allChecked.length}件${outside?`（ほかのお店の ${outside}件をふくむ）`:""}</div>
         <div class="money num">${yen(sum)}</div></div>
       <button class="btn accent" style="width:auto;padding:11px 16px" data-act="fix" ${checked.size?"":"disabled"}>レシートで確定</button>
     </div>
@@ -1102,7 +1103,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v1.5 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v1.3 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
@@ -1275,6 +1276,7 @@ function closeScan(){
   try{ if(SCAN && SCAN.onClose) SCAN.onClose(); }catch(e){}
   try{ FGBarcodeScanner.stop(); }catch(e){}
   SCAN = null; RX = null; closeSheet();
+  render();   /* 読み取った結果を画面に返す */
 }
 async function scanTorch(){
   const b = $("#sc-torch"); if(!b) return;
@@ -1309,10 +1311,12 @@ function scanBuy(){
   });
 }
 
-/* 読んだ番号をどう扱うか */
+/* 読んだ番号をどう扱うか
+   手に持っている物が、画面の絞り込みで見えなくなるのは筋が通らない。
+   お店のチップに関係なく、かりおさえ中のもの全部から探す。 */
 function bcHit(code){
-  const it = DB.items.find(x => x.jan && x.jan === code);
-  const rest = pendingForFilter().filter(r => !checked.has(r.id));
+  const it  = DB.items.find(x => x.jan && x.jan === code);
+  const all = DB.reqs.filter(r => r.status === "reserved");
 
   if(!it){
     SCAN.paused = true;
@@ -1321,7 +1325,8 @@ function bcHit(code){
       <label for="sc-pick" style="margin-top:4px">いま持っているのは、どの品ですか</label>
       <select id="sc-pick">
         <option value="">— えらぶ —</option>
-        ${rest.map(r => `<option value="${r.id}">${esc(r.name)}${r.qty>1?` ×${r.qty}`:""}／${esc(walletLabel(r.kind, r.wid))}</option>`).join("")}
+        ${all.filter(r => !checked.has(r.id)).map(r =>
+          `<option value="${r.id}">${esc(r.name)}${r.qty>1?` ×${r.qty}`:""}／${esc(walletLabel(r.kind, r.wid))}</option>`).join("")}
       </select>
       <div class="row" style="gap:8px;margin-top:8px">
         <button class="btn mini accent grow" data-act="bcbind" data-code="${esc(code)}">この番号をおぼえる</button>
@@ -1330,21 +1335,55 @@ function bcHit(code){
     return;
   }
 
-  const hit = rest.find(r => r.itemId && r.itemId === it.id) ||
-              rest.find(r => norm(r.name) === norm(it.name));
-  if(!hit){
-    scanMsg(`読めました　${code}\n${it.name} は、いまの買うリストにありません。`, "ng");
+  const same = r => (r.itemId && r.itemId === it.id) || norm(r.name) === norm(it.name);
+  const mine = all.filter(same);
+  const open = mine.filter(r => !checked.has(r.id));
+
+  if(open.length){ bcCheck(open[0], it); return; }
+
+  /* なぜ消せないのかを、はっきり言う */
+  if(mine.length){
+    scanMsg(`読めました　${code}\n✓ ${it.name} は ${mine.length}件とも、もうチェックずみです。`, "ok");
     return;
   }
-  bcCheck(hit, it);
+  SCAN.paused = true;
+  scanMsg(`読めました　${code}\n▲ ${it.name} は、だれもたのんでいません。`, "ng");
+  scanAct(`
+    <div class="muted small" style="margin-top:4px">買うものに足しますか。だれのお金で買うかをえらんでください。</div>
+    <select id="sc-who" style="margin-top:4px">
+      ${DB.children.filter(c => !c.hidden).map(c =>
+        `<option value="child:${c.id}">${esc(c.name)}（つかえる ${yen(availOf("child", c.id))}）</option>`).join("")}
+      <option value="common:">みんなのおさいふ（つかえる ${yen(availOf("common",""))}）</option>
+    </select>
+    <div class="row" style="gap:8px;margin-top:8px">
+      <button class="btn mini accent grow" data-act="bcadd" data-id="${it.id}">${esc(it.name)} を買うものに足す</button>
+      <button class="btn mini ghost grow" data-act="bcskip">とばす</button>
+    </div>`);
+}
+
+/* その場で買うものに足す */
+function bcAdd(itemId){
+  const it = DB.items.find(x => x.id === itemId); if(!it) return;
+  const v = $("#sc-who") ? $("#sc-who").value : "";
+  if(!v){ toast("だれのお金で買うかえらんでください"); return; }
+  const [kind, wid] = v.split(":");
+  const r = {id: uid(), ts: Date.now(), kind, wid: wid||"", shopId: it.shopId, itemId: it.id,
+             name: it.name, plan: it.price, qty: 1, cat: it.cat || "その他",
+             status: "reserved", actual: 0, btime: 0, staffId: "", advanced: false};
+  DB.reqs.push(r);
+  scanAct(""); SCAN.paused = false;
+  bcCheck(r, it);
+  toast(`${it.name} を足しました`);
 }
 
 /* チェックを入れて、同じ品の残りを知らせる */
 function bcCheck(hit, it){
   checked.add(hit.id);
-  const rest = pendingForFilter().filter(r => !checked.has(r.id));
+  const rest = DB.reqs.filter(r => r.status === "reserved" && !checked.has(r.id));
   const same = rest.filter(r => (r.itemId && r.itemId === it.id) || norm(r.name) === norm(it.name)).length;
+  const otherShop = shopFilter !== "__all__" && hit.shopId !== shopFilter;
   scanMsg(`✓ ${it.name} → ${walletLabel(hit.kind, hit.wid)}　のこり ${rest.length}件`
+    + (otherShop ? `\n（${shopName(hit.shopId)} の品です）` : "")
     + (same ? `\n▲ 同じ商品をあと ${same}人ぶん たのまれています。もう一度読ませてください。` : ""), "ok");
   save();
   if(!rest.length) setTimeout(() => { closeScan(); toast("ぜんぶチェックできました"); render(); }, 900);
@@ -1782,6 +1821,7 @@ document.addEventListener("click", e => {
     case "scanbuy": scanBuy(); break;
     case "scantest": scanTest(); break;
     case "bcbind": bcBind(b.dataset.code); break;
+    case "bcadd": bcAdd(b.dataset.id); break;
     case "bcskip": scanAct(""); if(SCAN){ SCAN.paused = false; SCAN.lastText = ""; } scanMsg("カメラを向けてください"); break;
     case "scanjan": scanJan(); break;
     case "sctorch": scanTorch(); break;
