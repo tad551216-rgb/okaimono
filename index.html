@@ -136,6 +136,15 @@ nav.tabs .badge{
 .warnbox{border:1px solid var(--verm);background:rgba(201,71,46,.06);color:var(--verm);font-size:12.5px;padding:8px 10px;border-radius:2px;margin:8px 0}
 hr.sep{border:0;border-top:1px dashed var(--line);margin:16px 0}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+.scmsg{white-space:pre-line;font-size:15px;font-weight:700;line-height:1.5;
+  background:var(--paper);border:2px solid var(--ink);border-radius:0 0 3px 3px;border-top:0;
+  padding:11px 12px;min-height:3.4em;color:var(--ink)}
+.scmsg.ok{background:#EAF3ED;border-color:var(--ok);color:var(--ok)}
+.scmsg.ng{background:#FBEEEA;border-color:var(--verm);color:var(--verm)}
+.scmsg.flash{animation:scf .45s ease-out}
+@keyframes scf{0%{transform:scale(1.03);filter:brightness(1.25)}100%{transform:scale(1);filter:none}}
+#sc-diag{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+  white-space:pre-line;line-height:1.85;word-break:break-all}
 #upd{position:fixed;left:10px;right:10px;bottom:calc(74px + env(safe-area-inset-bottom));z-index:45;
   background:var(--ink);color:#fff;border-radius:3px;padding:11px 13px;display:flex;align-items:center;gap:10px;
   box-shadow:0 3px 12px rgba(30,45,62,.28);font-size:13px}
@@ -217,7 +226,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v1.3
+   おかいもの帖  v1.5
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -1070,6 +1079,18 @@ function viewSet(){
     </div>
   </details>
 
+  <details class="acc"><summary>カメラの状態</summary>
+    <div class="body">
+      <div class="muted small" style="padding-top:8px">いまのひらき方：<b>${esc(location.protocol)}//${esc(location.hostname || "（ファイル）")}</b></div>
+      ${(() => { const ng = cameraTrouble();
+        return ng ? `<div class="warnbox" style="white-space:pre-line"><b>${esc(ng[0])}</b>\n${esc(ng[1])}</div>`
+                  : `<div class="note" style="border-color:var(--ok);color:var(--ok)">カメラは使えます。バーコードとQRの読み取りができます。</div>`; })()}
+      <div class="muted small">読み取りの部品：${window.FGBarcodeScanner ? "入っています" : "<b>入っていません</b>"}</div>
+      <div class="btns"><button class="btn ghost" data-act="scantest">📷 読み取りテストをする</button></div>
+      <div class="muted small">どんなバーコード・QRでも、読めたものをそのまま出します。うまく動かないときは、この画面をお知らせください。</div>
+    </div>
+  </details>
+
   <details class="acc"><summary>お試しと、まっさらに戻す</summary>
     <div class="body">
       <div class="muted small" style="padding-top:8px">入力した内容は<b>すべてこの端末の中だけ</b>に保存されます。端末を初期化すると記録も消えますので、「出力」タブでバックアップをお取りください。</div>
@@ -1081,7 +1102,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v1.3 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v1.5 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
@@ -1179,18 +1200,43 @@ let RX = null;
 let SCAN = null;
 
 /* 読み取り画面（QRもバーコードも同じ器） */
+function cameraTrouble(){
+  if(!window.FGBarcodeScanner)
+    return ["読み取りの部品が入っていません",
+            "index.html を取り直してください。ファイルの途中が欠けている可能性があります。"];
+  if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){
+    if(location.protocol === "file:")
+      return ["ファイルを直接ひらいています",
+              "この開き方では、ブラウザがカメラを渡してくれません。\n\n" +
+              "・GitHub Pages などに置いて https:// でひらく\n" +
+              "・VS Code の Live Server で http://localhost としてひらく\n\n" +
+              "どちらかにしてください。QRの表示やレシートの読み取りは、このままでもお使いになれます。"];
+    if(location.protocol !== "https:" && location.hostname !== "localhost")
+      return ["https:// でひらいてください",
+              "カメラは、安全な通信でひらいたページでしか使えません。いまは " + location.protocol + " です。"];
+    return ["このブラウザではカメラが使えません",
+            "Safari か Chrome の最新版でお試しください。"];
+  }
+  return null;
+}
+
 function openScan(o){
-  if(!window.FGBarcodeScanner || !FGBarcodeScanner.isSupported()){
-    toast("この端末ではカメラが使えません"); return;
+  const ng = cameraTrouble();
+  if(ng){
+    sheet(`<h3>${esc(ng[0])}</h3>
+      <div class="muted" style="white-space:pre-line;margin-top:8px">${esc(ng[1])}</div>
+      <div class="btns"><button class="btn ghost" data-act="close">とじる</button></div>`);
+    return;
   }
   SCAN = o;
   sheet(`
     <h3>${esc(o.title)}</h3>
-    <div class="muted" id="sc-n" style="white-space:pre-line;min-height:2.6em">カメラを向けてください</div>
-    <div style="position:relative;margin:10px 0">
-      <video id="sc-v" playsinline muted style="width:100%;background:#000;border-radius:3px"></video>
+    <div style="position:relative;margin:8px 0 0">
+      <video id="sc-v" playsinline muted style="width:100%;background:#000;border-radius:3px;display:block"></video>
       <div style="position:absolute;inset:${o.ring||"14% 10%"};border:3px solid rgba(255,255,255,.85);border-radius:4px;pointer-events:none"></div>
     </div>
+    <div id="sc-n" class="scmsg">カメラを向けてください</div>
+    <div id="sc-act"></div>
     <div class="muted small">${o.hint||""}</div>
     <div class="btns" style="flex-direction:column">
       <button class="btn ghost" data-act="sctorch" id="sc-torch" hidden>💡 ライト</button>
@@ -1199,20 +1245,37 @@ function openScan(o){
 
   FGBarcodeScanner.start($("#sc-v"),
     (text, fmt) => {
-      if(!SCAN) return;
+      if(!SCAN || SCAN.paused) return;
       const now = Date.now();
       if(SCAN.lastText === text && now - (SCAN.lastAt||0) < 1200) return;
       SCAN.lastText = text; SCAN.lastAt = now;
       SCAN.onText(text, fmt);
     },
-    () => { const l = $("#sc-n"); if(l) l.textContent = "カメラが使えません。ブラウザの設定で許可されているか確かめてください。"; },
+    err => {
+      const m = String((err && (err.name || err.message)) || "");
+      scanMsg(/NotAllowed|Permission/i.test(m) ? "カメラの使用が許可されていません。ブラウザの設定でお許しください。"
+            : /NotFound|Devices/i.test(m)      ? "カメラが見つかりません。"
+            : /NotReadable|Track/i.test(m)     ? "ほかのアプリがカメラを使っています。そちらを閉じてからお試しください。"
+            : "カメラをひらけませんでした（" + (m || "原因不明") + "）");
+    },
     o.formats, null
   ).then(() => {
     try{ if(FGBarcodeScanner.isTorchSupported()) $("#sc-torch").hidden = false; }catch(e){}
   }).catch(() => {});
 }
-function scanMsg(t){ const l = $("#sc-n"); if(l) l.textContent = t; }
-function closeScan(){ try{ FGBarcodeScanner.stop(); }catch(e){} SCAN = null; RX = null; closeSheet(); }
+function scanMsg(t, kind){
+  const l = $("#sc-n"); if(!l) return;
+  l.textContent = t;
+  l.className = "scmsg" + (kind ? " " + kind : "");
+  void l.offsetWidth;
+  l.classList.add("flash");
+  if(kind === "ok" && navigator.vibrate) try{ navigator.vibrate(60); }catch(e){}
+}
+function closeScan(){
+  try{ if(SCAN && SCAN.onClose) SCAN.onClose(); }catch(e){}
+  try{ FGBarcodeScanner.stop(); }catch(e){}
+  SCAN = null; RX = null; closeSheet();
+}
 async function scanTorch(){
   const b = $("#sc-torch"); if(!b) return;
   b.dataset.on = b.dataset.on === "1" ? "" : "1";
@@ -1240,23 +1303,126 @@ function scanBuy(){
   openScan({
     title: "バーコードで消し込む",
     formats: BARCODES,
-    hint: `リングの中でバーコードがくっきり見える距離（10〜20cm）で、数秒じっと止めてください。
-      斜めや、袋のしわで曲がった面は読み取りにくくなります。`,
-    onText: code => {
-      const it = DB.items.find(x => x.jan && x.jan === code);
-      if(!it){ scanMsg(`とうろくにない商品です（${code}）`); return; }
-      const rest = pendingForFilter().filter(r => !checked.has(r.id));
-      const hit = rest.find(r => r.itemId && r.itemId === it.id) ||
-                  rest.find(r => norm(r.name) === norm(it.name));
-      if(!hit){ scanMsg(`${it.name}：買うリストにありません`); return; }
-      checked.add(hit.id);
-      const rest2 = pendingForFilter().filter(r => !checked.has(r.id));
-      const same = rest2.filter(r => (r.itemId && r.itemId === it.id) || norm(r.name) === norm(it.name)).length;
-      scanMsg(`✓ ${it.name} → ${walletLabel(hit.kind, hit.wid)}　のこり ${rest2.length}件`
-        + (same ? `\n▲ 同じ商品をあと ${same}人ぶん たのまれています。もう一度読ませてください。` : ""));
-      if(!rest2.length) setTimeout(() => { closeScan(); toast("ぜんぶチェックできました"); render(); }, 900);
-    }
+    hint: `リングの中でバーコードがくっきり見える距離（10〜20cm）で、数秒じっと止めてください。<br>
+      <b>缶やペットボトルのような丸い面は読み取りにくくなります。</b>平らな面を選んでください。`,
+    onText: code => bcHit(code)
   });
+}
+
+/* 読んだ番号をどう扱うか */
+function bcHit(code){
+  const it = DB.items.find(x => x.jan && x.jan === code);
+  const rest = pendingForFilter().filter(r => !checked.has(r.id));
+
+  if(!it){
+    SCAN.paused = true;
+    scanMsg(`読めました　${code}\n▲ この番号の商品は、まだとうろくされていません。`, "ng");
+    scanAct(`
+      <label for="sc-pick" style="margin-top:4px">いま持っているのは、どの品ですか</label>
+      <select id="sc-pick">
+        <option value="">— えらぶ —</option>
+        ${rest.map(r => `<option value="${r.id}">${esc(r.name)}${r.qty>1?` ×${r.qty}`:""}／${esc(walletLabel(r.kind, r.wid))}</option>`).join("")}
+      </select>
+      <div class="row" style="gap:8px;margin-top:8px">
+        <button class="btn mini accent grow" data-act="bcbind" data-code="${esc(code)}">この番号をおぼえる</button>
+        <button class="btn mini ghost grow" data-act="bcskip">ちがう・とばす</button>
+      </div>`);
+    return;
+  }
+
+  const hit = rest.find(r => r.itemId && r.itemId === it.id) ||
+              rest.find(r => norm(r.name) === norm(it.name));
+  if(!hit){
+    scanMsg(`読めました　${code}\n${it.name} は、いまの買うリストにありません。`, "ng");
+    return;
+  }
+  bcCheck(hit, it);
+}
+
+/* チェックを入れて、同じ品の残りを知らせる */
+function bcCheck(hit, it){
+  checked.add(hit.id);
+  const rest = pendingForFilter().filter(r => !checked.has(r.id));
+  const same = rest.filter(r => (r.itemId && r.itemId === it.id) || norm(r.name) === norm(it.name)).length;
+  scanMsg(`✓ ${it.name} → ${walletLabel(hit.kind, hit.wid)}　のこり ${rest.length}件`
+    + (same ? `\n▲ 同じ商品をあと ${same}人ぶん たのまれています。もう一度読ませてください。` : ""), "ok");
+  save();
+  if(!rest.length) setTimeout(() => { closeScan(); toast("ぜんぶチェックできました"); render(); }, 900);
+}
+
+/* 読んだ番号を、リストの品に結びつけて覚える */
+function bcBind(code){
+  const id = $("#sc-pick") ? $("#sc-pick").value : "";
+  if(!id){ toast("どの品かえらんでください"); return; }
+  const r = DB.reqs.find(x => x.id === id);
+  if(!r) return;
+
+  let it = r.itemId ? DB.items.find(x => x.id === r.itemId) : null;
+  if(!it) it = DB.items.find(x => x.shopId === r.shopId && norm(x.name) === norm(r.name));
+  if(it){
+    it.jan = code;
+  } else {
+    it = {id: uid(), shopId: r.shopId, name: r.name, price: r.plan, cat: r.cat, jan: code};
+    DB.items.push(it);
+  }
+  if(!r.itemId) r.itemId = it.id;
+  scanAct("");
+  SCAN.paused = false;
+  bcCheck(r, it);
+  toast(`${it.name} におぼえました`);
+}
+
+function scanAct(html){ const el = $("#sc-act"); if(el) el.innerHTML = html; }
+
+/* 読み取りテスト — 何が起きているかを見る */
+function scanTest(){
+  const ng = cameraTrouble();
+  if(ng){
+    sheet(`<h3>${esc(ng[0])}</h3>
+      <div class="muted" style="white-space:pre-line;margin-top:8px">${esc(ng[1])}</div>
+      <div class="btns"><button class="btn ghost" data-act="close">とじる</button></div>`);
+    return;
+  }
+  const t0 = Date.now();
+  let hits = 0, last = "（まだありません）", err = "";
+  sheet(`
+    <h3>読み取りテスト</h3>
+    <div class="muted">バーコードでもQRでも、読めたものをそのまま出します。とうろくは見ません。</div>
+    <video id="sc-v" playsinline muted style="width:100%;background:#000;border-radius:3px;margin:10px 0;display:block"></video>
+    <div class="card tight" id="sc-diag">起動しています…</div>
+    <div class="btns" style="flex-direction:column">
+      <button class="btn ghost" data-act="sctorch" id="sc-torch" hidden>💡 ライト</button>
+      <button class="btn ghost" data-act="scclose">とじる</button>
+    </div>
+    <div class="note">映像のサイズが 0×0 のままなら、カメラの映像が届いていません。
+      サイズが出ているのに読めた数が増えないなら、映像は来ているが解析できていない、ということです。
+      この画面のとおりにお知らせください。</div>`);
+
+  const upd = () => {
+    const v = $("#sc-v"), el = $("#sc-diag");
+    if(!v || !el) return;
+    el.textContent =
+      `ひらき方    ${location.protocol}//${location.hostname || "（ファイル）"}\n` +
+      `部品        ${window.FGBarcodeScanner ? "あり" : "なし"}\n` +
+      `映像        ${v.videoWidth}×${v.videoHeight}\n` +
+      `再生        ${v.paused ? "とまっています" : "うごいています"}\n` +
+      `経過        ${Math.round((Date.now()-t0)/1000)}秒\n` +
+      `読めた数    ${hits}\n` +
+      (err ? `エラー      ${err}\n` : "") +
+      `\n最後に読めたもの\n${last}`;
+  };
+  const timer = setInterval(upd, 400);
+  SCAN = {onText: () => {}, onClose: () => clearInterval(timer)};
+
+  FGBarcodeScanner.start($("#sc-v"),
+    (text, fmt) => { hits++; last = `［${fmt || "形式ふめい"}］\n${text}`; upd();
+      if(navigator.vibrate) try{ navigator.vibrate(60); }catch(e){} },
+    e => { err = String((e && (e.name || e.message)) || e); upd(); },
+    null, null
+  ).then(() => {
+    try{ if(FGBarcodeScanner.isTorchSupported()) $("#sc-torch").hidden = false; }catch(e){}
+    upd();
+  }).catch(e => { err = "起動できず: " + String((e && (e.name || e.message)) || e); upd(); });
 }
 
 /* バーコードから商品を登録する */
@@ -1267,10 +1433,11 @@ function scanJan(){
     hint: "商品のバーコードを、リングの中に合わせてください。",
     onText: code => {
       const dup = DB.items.find(x => x.jan === code);
-      closeScan();
       const el = $("#m-ijan"); if(el) el.value = code;
-      if(dup) toast(`すでに登録ずみ：${dup.name}`);
-      else { toast("読みました：" + code); const n = $("#m-iname"); if(n) n.focus(); }
+      if(dup){ scanMsg(`読めました　${code}\nすでに「${dup.name}」に付いています。`); return; }
+      closeScan();
+      toast("読みました：" + code);
+      const n = $("#m-iname"); if(n) n.focus();
     }
   });
 }
@@ -1284,7 +1451,7 @@ function rxTake(text){
   if(RX.sid && RX.sid !== sid){ RX.sid = sid; RX.parts = {}; }
   RX.sid = sid; RX.total = tot; RX.parts[seq] = body;
   const got = Object.keys(RX.parts).length;
-  scanMsg(`${got} / ${tot} 枚 読み取れました`);
+  scanMsg(`${got} / ${tot} 枚 読み取れました`, got >= tot ? "ok" : null);
   if(got < tot) return;
 
   RX.busy = true;
@@ -1613,6 +1780,9 @@ document.addEventListener("click", e => {
     case "txnext": if(TX){ txStop(); TX.at = (TX.at+1) % TX.frames.length; txDraw(); } break;
     case "txclose": txClose(); break;
     case "scanbuy": scanBuy(); break;
+    case "scantest": scanTest(); break;
+    case "bcbind": bcBind(b.dataset.code); break;
+    case "bcskip": scanAct(""); if(SCAN){ SCAN.paused = false; SCAN.lastText = ""; } scanMsg("カメラを向けてください"); break;
     case "scanjan": scanJan(); break;
     case "sctorch": scanTorch(); break;
     case "scclose": closeScan(); break;
