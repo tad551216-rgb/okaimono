@@ -19,6 +19,8 @@
   --paper:#FFFDF8; --ok:#3C7A5A; --warn:#B07B12; --fs:1.25;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* 入力欄は長押しできるようにする（「テキストをスキャン」を出すため） */
+input,textarea{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default;touch-action:manipulation}
 html,body{margin:0;padding:0}
 body{
   font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
@@ -67,6 +69,7 @@ select:not(.ph){color:var(--ink);-webkit-text-fill-color:var(--ink)}
 select option{color:var(--ink)}
 input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--verm);outline-offset:1px}
 textarea{min-height:110px;font-size:calc(12px * var(--fs));font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
+textarea.plain{font-family:inherit;font-size:calc(15px * var(--fs));word-break:normal;line-height:1.6;min-height:150px}
 input[type=checkbox]{width:22px;height:22px;accent-color:var(--verm);flex:none}
 .btn{
   font:inherit;font-size:calc(14px * var(--fs));font-weight:700;letter-spacing:.04em;cursor:pointer;
@@ -287,7 +290,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v2.7
+   おかいもの帖  v2.8
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -804,15 +807,20 @@ function drawReceipt(){
       <h3>レシートを読む</h3>
       <div class="muted">${esc(where)}／かりおさえ ${pool.length}件</div>
       <div class="note">${ios
-        ? "入力欄を長押しして「テキストをスキャン」。カメラをレシートに向けると、文字がそのまま入ります。"
-        : "キーボードのカメラ（レンズ）から文字を読み取って貼り付けます。うまく入らないときは手で打っても構いません。"}
-        読み取りは端末の中だけで行われます。</div>
+        ? "空の欄を長押しすると「テキストをスキャン」が出ます。カメラをレシートに向けると文字が入ります。<br>出ないときは、キーボードの絵文字キーのとなり、または「あA」の長押しからもお使いいただけます。"
+        : "キーボードのカメラ（レンズ）から文字を読み取って貼り付けます。"}
+        手で打っていただいてもかまいません。読み取りは端末の中だけで行われます。</div>
       <label for="r-text">レシートの文字</label>
-      <textarea id="r-text" style="min-height:170px" placeholder="いちごポッキー　168&#10;ポテトチップス　128&#10;合計　296"></textarea>
+      <textarea id="r-text" class="plain" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false"
+        placeholder="いちごポッキー　168&#10;ポテトチップス　128&#10;合計　296"></textarea>
       <div class="btns">
         <button class="btn ghost" data-act="close">やめる</button>
         <button class="btn accent" data-act="doparse">読み取る</button>
-      </div>`);
+      </div>
+      <hr class="sep">
+      <div class="muted small">長押しでうまくいかないときは、こちらから。</div>
+      <div class="btns"><button class="btn ghost" data-act="rcpaste">📋 コピーしたものを貼り付ける</button></div>
+      <div class="muted small">ほかのアプリ（カメラや写真アプリの文字認識、メモ帳など）で読み取ってコピーしておけば、ここから入ります。</div>`);
     setTimeout(() => { const t = $("#r-text"); if(t) t.focus(); }, 80);
     return;
   }
@@ -1250,8 +1258,10 @@ function viewSet(){
       <label for="c-device">この端末の名前（誰の端末か）</label>
       <input id="c-device" type="text" value="${esc(c.device)}" placeholder="事務所のiPad">
       <label for="c-pass">共有の合言葉（QRで渡すときに使います）</label>
+      <div class="muted small" style="margin-bottom:3px">日本語で入れるときは、右の「見る」を押してから打ってください。</div>
       <div class="row" style="gap:8px">
-        <input id="c-pass" class="grow" type="password" autocomplete="off" value="${esc(c.pass)}">
+        <input id="c-pass" class="grow" type="password" autocomplete="new-password"
+          autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(c.pass)}">
         <button class="btn mini ghost" data-act="peek">見る</button>
       </div>
       <div class="btns"><button class="btn mini accent" data-act="saveconf">保存</button></div>
@@ -1294,7 +1304,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v2.7 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v2.8 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
@@ -2008,6 +2018,17 @@ document.addEventListener("click", e => {
     case "dofix": doFix(); break;
     case "receipt": openReceipt(); break;
     case "doparse": doParse(); break;
+    case "rcpaste": {
+      const el = $("#r-text"); if(!el) break;
+      if(!(navigator.clipboard && navigator.clipboard.readText)){
+        toast("この端末では貼り付けできません。欄を長押ししてください"); break;
+      }
+      navigator.clipboard.readText().then(t => {
+        if(!t || !t.trim()){ toast("コピーされたものがありません"); return; }
+        el.value = (el.value ? el.value + "\n" : "") + t.trim();
+        toast("貼り付けました");
+      }).catch(() => toast("貼り付けが許可されませんでした。欄を長押ししてください"));
+      break; }
     case "reparse": RC.stage = 1; drawReceipt(); break;
     case "applyrc": applyReceipt(); break;
     case "delalias": {
@@ -2098,7 +2119,13 @@ document.addEventListener("click", e => {
         pass:   $("#c-pass")   ? $("#c-pass").value          : (DB.conf.pass||"")
       };
       save(); toast("保存しました"); break; }
-    case "peek": { const el = $("#c-pass"); el.type = el.type === "password" ? "text" : "password"; break; }
+    case "peek": {
+      const el = $("#c-pass");
+      const show = el.type === "password";
+      el.type = show ? "text" : "password";
+      b.textContent = show ? "かくす" : "見る";
+      if(show) el.focus();
+      break; }
     case "gotoout": tab = "out"; render(); window.scrollTo(0,0); break;
     case "fs": applyFs(b.dataset.v); render(); break;
     case "sample": loadSample(); break;
