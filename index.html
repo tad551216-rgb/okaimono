@@ -287,7 +287,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v2.5
+   おかいもの帖  v2.7
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -570,7 +570,8 @@ function addRequest(){
     status:"reserved", actual:0, btime:0, staffId:"", advanced:false
   });
   save();
-  reqForm.name = ""; reqForm.plan = ""; reqForm.qty = 1; reqForm.itemId = "";   /* だれの・どの店 は残す */
+  /* すべて空に戻す — 選び終えた状態が残ると、次の子のぶんを取り違える */
+  reqForm = {kind:"child", wid:"", shopId:"", itemId:"", name:"", plan:"", qty:1, cat:"おやつ"};
   toast(`${name} をかりおさえしました`);
   render();
 }
@@ -1293,7 +1294,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v2.5 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v2.7 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
@@ -1432,6 +1433,7 @@ function openScan(o){
     <div class="muted small">${o.hint||""}</div>
     <div class="btns" style="flex-direction:column">
       <button class="btn ghost" data-act="sctorch" id="sc-torch" hidden>💡 ライト</button>
+      ${o.list ? `<div class="muted small" style="margin-top:-4px">ライトは、対応している端末でだけ出ます。</div>` : ""}
       <button class="btn ghost" data-act="scclose">閉じる</button>
     </div>`);
 
@@ -1497,7 +1499,8 @@ function scanBuy(){
   openScan({
     title: "バーコードで消し込む",
     list: true,
-    hint: `リングの中でくっきり見える距離（10〜20cm）で、数秒じっと止めてください。`,
+    hint: `リングの中でくっきり見える距離（10〜20cm）で、数秒じっと止めてください。
+      缶やペットボトルの曲がった面でも、縦向きでも読めます。暗いお店では「💡 ライト」を。`,
     formats: BARCODES,
     onText: code => bcHit(code)
   });
@@ -1722,7 +1725,7 @@ function scanJan(){
   openScan({
     title: "バーコードを読む",
     formats: BARCODES,
-    hint: "商品のバーコードを、リングの中に合わせてください。",
+    hint: "商品のバーコードを、リングの中に合わせてください。曲がった面でも読めます。",
     onText: code => {
       const dup = DB.items.find(x => x.jan === code);
       const el = $("#m-ijan"); if(el) el.value = code;
