@@ -136,33 +136,34 @@ nav.tabs .badge{
 .warnbox{border:1px solid var(--verm);background:rgba(201,71,46,.06);color:var(--verm);font-size:12.5px;padding:8px 10px;border-radius:2px;margin:8px 0}
 hr.sep{border:0;border-top:1px dashed var(--line);margin:16px 0}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
-.sclist{border:2px solid var(--ink);border-top:0;border-radius:0 0 3px 3px;background:var(--paper);
-  max-height:52vh;overflow:auto;-webkit-overflow-scrolling:touch}
-.sclist .hd{position:sticky;top:0;background:var(--ink);color:#fff;font-size:13px;font-weight:700;
-  letter-spacing:.06em;padding:8px 13px;z-index:2}
-.scr{display:flex;align-items:center;gap:12px;padding:13px 13px;border-bottom:1px dashed var(--line-soft);
+.sclist{border:2px solid var(--ink);border-radius:3px;background:var(--paper);margin-top:8px;
+  max-height:62vh;overflow:auto;-webkit-overflow-scrolling:touch}
+.sclist .hd{position:sticky;top:0;background:var(--ink);color:#fff;font-size:15px;font-weight:700;
+  letter-spacing:.04em;padding:9px 14px;z-index:2}
+.scr{display:flex;align-items:center;gap:12px;padding:15px 14px;border-bottom:1px dashed var(--line-soft);
   transition:transform .38s ease, opacity .38s ease, background-color .3s}
 .scr:last-child{border-bottom:0}
 .scr .tx{flex:1;min-width:0}
-.scr .nm{font-size:20px;font-weight:700;line-height:1.25;letter-spacing:.01em;
+.scr .nm{font-size:25px;font-weight:700;line-height:1.2;letter-spacing:.01em;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.scr .who{font-size:13px;color:var(--ink-soft);margin-top:3px;
+.scr .who{font-size:15px;color:var(--ink-soft);margin-top:4px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.scr .pr{flex:none;font-variant-numeric:tabular-nums;font-size:19px;font-weight:700;letter-spacing:.01em}
+.scr .pr{flex:none;font-variant-numeric:tabular-nums;font-size:23px;font-weight:700;letter-spacing:.01em}
 .scr.done{opacity:.5;background:#EEF4F0}
 .scr.done .nm{text-decoration:line-through;text-decoration-thickness:2.5px}
 .scr.done .nm,.scr.done .pr{color:var(--ok)}
 .scr.just{background:#D8EDE0;animation:scpop .42s ease-out}
 @keyframes scpop{0%{transform:scale(1.04)}60%{transform:scale(1)}100%{transform:scale(1)}}
-.scempty{padding:22px 12px;text-align:center;color:var(--ink-soft);font-size:13px}
-.scdone{padding:20px 12px;text-align:center;color:var(--ok);font-size:17px;font-weight:700}
+.scempty{padding:24px 12px;text-align:center;color:var(--ink-soft);font-size:15px}
+.scdone{padding:22px 12px;text-align:center;color:var(--ok);font-size:21px;font-weight:700}
 #scflash{position:fixed;inset:0;z-index:55;pointer-events:none;opacity:0;background:var(--ok)}
 #scflash.on{animation:scfl .34s ease-out}
 @keyframes scfl{0%{opacity:.34}100%{opacity:0}}
-.haslist #sc-v{max-height:30vh;object-fit:cover}
-.scmsg{white-space:pre-line;font-size:15px;font-weight:700;line-height:1.5;
+.haslist #sc-v{max-height:22vh;object-fit:cover}
+.scmsg{white-space:pre-line;font-size:17px;font-weight:700;line-height:1.45;
   background:var(--paper);border:2px solid var(--ink);border-radius:0 0 3px 3px;border-top:0;
-  padding:11px 12px;min-height:3.4em;color:var(--ink)}
+  padding:11px 13px;color:var(--ink)}
+.scmsg:empty{display:none}
 .scmsg.ok{background:#EAF3ED;border-color:var(--ok);color:var(--ok)}
 .scmsg.ng{background:#FBEEEA;border-color:var(--verm);color:var(--verm)}
 .scmsg.flash{animation:scf .45s ease-out}
@@ -251,7 +252,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v1.3
+   おかいもの帖  v1.9
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -1128,7 +1129,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v1.3 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v1.9 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
@@ -1292,7 +1293,8 @@ function openScan(o){
 }
 function scanMsg(t, kind){
   const l = $("#sc-n"); if(!l) return;
-  l.textContent = t;
+  l.textContent = t || "";
+  if(!t){ l.className = "scmsg"; return; }
   l.className = "scmsg" + (kind ? " " + kind : "");
   void l.offsetWidth;
   l.classList.add("flash");
@@ -1462,7 +1464,7 @@ function bcCheck(hit, it){
   bcSign(true);
   const rest = DB.reqs.filter(r => r.status === "reserved" && !checked.has(r.id));
   const same = rest.filter(r => (r.itemId && r.itemId === it.id) || norm(r.name) === norm(it.name)).length;
-  scanMsg(same ? `${it.name}　同じものが あと ${same}件` : `${it.name}`, "ok");
+  scanMsg(same ? `${it.name}　同じものが あと ${same}件` : "", "ok");
   bcList(hit.id);
   if(!rest.length) setTimeout(() => { closeScan(); toast("ぜんぶ そろいました"); }, 1900);
 }
