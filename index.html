@@ -291,7 +291,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v2.9
+   おかいもの帖  v3.0
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -762,6 +762,88 @@ function parseReceipt(text){
   return {lines, total, tax};
 }
 
+/* ------------------------------------------------------------
+   写真からレシートの文字を読む（端末の中だけで処理します）
+   ------------------------------------------------------------ */
+let OCR = null;
+
+function ocrSay(t){ const el = $("#rc-prog"); if(el) el.textContent = t; }
+
+async function ocrImage(file){
+  ocrSay("したくをしています…");
+  let worker;
+  try{
+    if(!window.Tesseract) await loadScript("ocr/tesseract.min.js");
+    worker = OCR || (OCR = await Tesseract.createWorker("jpn", 1, {
+      workerPath: "ocr/worker.min.js",
+      corePath:   "ocr/tesseract-core-lstm.wasm.js",
+      langPath:   "ocr",
+      gzip: true,
+      logger: m => {
+        if(m.status === "recognizing text") ocrSay(`読んでいます… ${Math.round(m.progress*100)}%`);
+        else if(/loading|initializing/.test(m.status)) ocrSay("したくをしています…（はじめの一回だけ時間がかかります）");
+      }
+    }));
+  }catch(e){
+    ocrSay("読み取りのしくみを用意できませんでした。電波のあるところで一度お試しください。");
+    return;
+  }
+  try{
+    ocrSay("画像をととのえています…");
+    const url = await prepImage(file);
+    const { data } = await worker.recognize(url);
+    URL.revokeObjectURL(url);
+    const t = (data && data.text || "").trim();
+    if(!t){ ocrSay("文字が読み取れませんでした。明るいところで、まっすぐ撮ってみてください。"); return; }
+    const el = $("#r-text");
+    el.value = (el.value ? el.value + "\n" : "") + t;
+    const n = t.split(/\r?\n/).filter(x => x.trim()).length;
+    ocrSay(`${n}行を読みました。ちがっていたら直してから「読み取る」を押してください。`);
+  }catch(e){
+    ocrSay("うまく読めませんでした。もう一度お試しください。");
+  }
+}
+
+/* 感熱紙は文字が細い。大きくして、白黒をはっきりさせる */
+function prepImage(file){
+  return new Promise((ok, ng) => {
+    const img = new Image();
+    img.onload = () => {
+      const W = 1600;
+      const sc = Math.min(2.4, Math.max(1, W / img.naturalWidth));
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(img.naturalWidth * sc);
+      cv.height = Math.round(img.naturalHeight * sc);
+      const g = cv.getContext("2d");
+      g.drawImage(img, 0, 0, cv.width, cv.height);
+      const d = g.getImageData(0, 0, cv.width, cv.height), a = d.data;
+      let sum = 0;
+      for(let i = 0; i < a.length; i += 4){
+        const v = (a[i]*299 + a[i+1]*587 + a[i+2]*114) / 1000;
+        a[i] = a[i+1] = a[i+2] = v; sum += v;
+      }
+      const mid = sum / (a.length/4);
+      for(let i = 0; i < a.length; i += 4){       /* 明暗をひろげる */
+        const v = a[i] < mid ? Math.max(0, (a[i]-mid)*1.7 + mid) : Math.min(255, (a[i]-mid)*1.7 + mid);
+        a[i] = a[i+1] = a[i+2] = v;
+      }
+      g.putImageData(d, 0, 0);
+      cv.toBlob(b => ok(URL.createObjectURL(b)), "image/png");
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = ng;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function loadScript(src){
+  return new Promise((ok, ng) => {
+    const el = document.createElement("script");
+    el.src = src; el.onload = ok; el.onerror = ng;
+    document.head.appendChild(el);
+  });
+}
+
 /* レシート行 × かりおさえ中リクエスト の総当たりから、点数の高い順に割り当てる */
 function matchLines(lines, pool){
   const pairs = [];
@@ -813,23 +895,35 @@ function drawReceipt(){
         placeholder="いちごポッキー　168&#10;ポテトチップス　128&#10;合計　296"></textarea>
 
       <div class="btns" style="margin-top:8px">
+        <button class="btn accent grow" data-act="rcshot">📷 レシートを撮る</button>
+        <button class="btn ghost grow" data-act="rcpick">🖼 写真からえらぶ</button>
+      </div>
+      <div class="btns">
         <button class="btn ghost grow" data-act="rcpaste">📋 貼り付け</button>
         <button class="btn ghost grow" data-act="rcclear">消す</button>
       </div>
+      <input type="file" id="rc-cam" accept="image/*" capture="environment" hidden>
+      <input type="file" id="rc-img" accept="image/*" hidden>
+      <div id="rc-prog" class="muted small" style="min-height:1.5em"></div>
       <div class="btns">
         <button class="btn ghost grow" data-act="close">やめる</button>
         <button class="btn accent grow" data-act="doparse">読み取る</button>
       </div>
 
-      <details class="acc" style="margin-top:12px"><summary>文字の入れかた</summary>
+      <details class="acc" style="margin-top:10px"><summary>ほかの入れかた</summary>
         <div class="body">
-          <div class="note" style="margin-top:10px">${ios
-            ? "<b>空の欄を長押し</b>すると「テキストをスキャン」が出ます。カメラをレシートに向けると文字が入ります。<br><br>出てこないときは、キーボードを一度閉じてから長押ししてください。欄が小さいと、iPhoneがこの項目を省くことがあります。"
-            : "キーボードのカメラ（レンズ）から文字を読み取って貼り付けます。"}</div>
-          <div class="note">それでも出ないときは、<b>カメラアプリや写真アプリの文字認識</b>で読み取ってコピーし、上の「📋 貼り付け」から入れてください。</div>
-          <div class="muted small">手で打っていただいてもかまいません。読み取りは端末の中だけで行われます。</div>
+          <div class="note" style="margin-top:10px">カメラアプリや写真アプリの文字認識で読み取ってコピーし、「📋 貼り付け」から入れることもできます。<br>手で打っていただいてもかまいません。</div>
+          <div class="muted small">「📷 レシートを撮る」の読み取りは、すべてこの端末の中で行われます。写真もどこにも送られません。</div>
         </div>
       </details>`);
+
+    const pick = e => {
+      const f = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if(f) ocrImage(f);
+    };
+    $("#rc-cam").onchange = pick;
+    $("#rc-img").onchange = pick;
     return;
   }
 
@@ -1312,7 +1406,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v2.9 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v3.0 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
@@ -1475,6 +1569,7 @@ function openScan(o){
     try{ if(FGBarcodeScanner.isTorchSupported()) $("#sc-torch").hidden = false; }catch(e){}
   }).catch(() => {});
 }
+window.addEventListener("pagehide", () => { try{ if(OCR) OCR.terminate(); }catch(e){} });
 function scanMsg(t, kind){
   const l = $("#sc-n"); if(!l) return;
   l.textContent = t || "";
@@ -2026,6 +2121,8 @@ document.addEventListener("click", e => {
     case "dofix": doFix(); break;
     case "receipt": openReceipt(); break;
     case "doparse": doParse(); break;
+    case "rcshot": $("#rc-cam").click(); break;
+    case "rcpick": $("#rc-img").click(); break;
     case "rcclear": { const el = $("#r-text"); if(el){ el.value = ""; el.focus(); } break; }
     case "rcpaste": {
       const el = $("#r-text"); if(!el) break;
