@@ -90,6 +90,21 @@ nav.tabs .badge{
   position:absolute;top:3px;right:calc(50% - 20px);background:var(--verm);color:#fff;
   font-size:calc(9.5px * min(var(--fs), 1.3));font-weight:700;min-width:16px;height:16px;line-height:16px;border-radius:8px;padding:0 4px;
 }
+.modetabs{display:flex;gap:0;margin:0 0 12px;border:2px solid var(--ink);border-radius:3px;overflow:hidden}
+.modetabs button{flex:1;font:inherit;font-size:calc(14px * var(--fs));font-weight:700;letter-spacing:.04em;
+  background:transparent;color:var(--ink);border:0;padding:10px 6px;cursor:pointer;white-space:nowrap}
+.modetabs button[aria-current=true]{background:var(--ink);color:#fff}
+.modetabs button .n{font-size:calc(11px * var(--fs));opacity:.75;margin-left:5px}
+.dday{position:sticky;top:0;background:var(--cream);border-bottom:2px solid var(--ink);
+  font-size:calc(13px * var(--fs));font-weight:700;letter-spacing:.06em;padding:7px 2px 5px;z-index:5}
+.drow{display:flex;align-items:flex-start;gap:10px;padding:11px 0;border-bottom:1px dashed var(--line-soft);cursor:pointer}
+.drow:last-child{border-bottom:0}
+.drow .nm{font-size:calc(17px * var(--fs));font-weight:700;line-height:1.3}
+.drow.cx .nm{text-decoration:line-through;color:var(--ink-soft)}
+.drow .amt2{flex:none;text-align:right;font-variant-numeric:tabular-nums}
+.drow .amt2 b{font-size:calc(17px * var(--fs))}
+.diff{font-size:calc(12px * var(--fs));font-weight:700}
+.diff.up{color:var(--verm)} .diff.dn{color:var(--ok)}
 .chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;-webkit-overflow-scrolling:touch}
 .chip{
   flex:none;font:inherit;font-size:calc(13px * var(--fs));background:var(--paper);color:var(--ink);
@@ -253,7 +268,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v2.0
+   おかいもの帖  v2.1
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -537,6 +552,97 @@ let shopFilter = "__all__";
 const checked = new Set();
 const actualIn = {};
 
+function modeTabs(cur){
+  const n1 = DB.reqs.filter(r => r.status === "reserved").length;
+  const n2 = DB.reqs.filter(r => r.status !== "reserved").length;
+  return `<div class="modetabs">
+    <button data-mode="now"  aria-current="${cur==="now"}">かりおさえ中<span class="n">${n1}</span></button>
+    <button data-mode="done" aria-current="${cur==="done"}">すんだもの<span class="n">${n2}</span></button>
+  </div>`;
+}
+
+/* すんだもの — 買ったもの・買えなかったもの を日ごとに */
+function viewDone(){
+  const list = DB.reqs.filter(r => r.status !== "reserved")
+                      .sort((a, b) => (b.btime || b.ts) - (a.btime || a.ts));
+  let h = modeTabs("done");
+
+  if(!list.length){
+    h += `<div class="empty"><b>すんだ買いものはまだありません</b>買いものを確定するか「買えなかった」にすると、ここに残ります。</div>`;
+    $("#v-shop").innerHTML = h; bindMode(); return;
+  }
+
+  const days = {};
+  list.forEach(r => { const k = ymd(r.btime || r.ts); (days[k] = days[k] || []).push(r); });
+
+  Object.keys(days).forEach(day => {
+    const rows = days[day];
+    const paid = rows.filter(r => r.status === "bought").reduce((a, r) => a + r.actual, 0);
+    const ng   = rows.filter(r => r.status === "canceled").length;
+    h += `<div class="card">
+      <div class="dday">${esc(day)}　<span class="muted">${rows.length}件　${yen(paid)}${ng ? `　買えなかった ${ng}件` : ""}</span></div>`;
+    rows.forEach(r => {
+      const cx = r.status === "canceled";
+      const plan = r.plan * r.qty, d = r.actual - plan;
+      h += `<div class="drow${cx ? " cx" : ""}" data-done="${r.id}">
+        <div class="grow">
+          <div class="nm">${esc(r.name)}${r.qty > 1 ? ` <span class="muted">×${r.qty}</span>` : ""}</div>
+          <div style="margin-top:3px">
+            <span class="tag ${r.kind==="common"?"common":"child"}">${esc(walletLabel(r.kind, r.wid))}</span>
+            <span class="tag">${esc(r.cat)}</span>
+            ${r.advanced ? `<span class="tag hot">立替</span>` : ""}
+          </div>
+          <div class="muted small">${esc(shopName(r.shopId))}${r.staffId ? `／${esc(walletLabel("staff", r.staffId))}` : ""}</div>
+        </div>
+        <div class="amt2">
+          ${cx ? `<b class="muted">買えず</b>` : `<b>${yen(r.actual)}</b>
+            ${d ? `<div class="diff ${d>0?"up":"dn"}">よてい ${d>0?"+":"−"}${yen(Math.abs(d))}</div>`
+                : `<div class="muted small">よていどおり</div>`}`}
+        </div>
+      </div>`;
+    });
+    h += `</div>`;
+  });
+  $("#v-shop").innerHTML = h;
+  bindMode();
+  $$("[data-done]", $("#v-shop")).forEach(el => el.onclick = () => openDone(el.dataset.done));
+}
+
+function bindMode(){
+  $$("[data-mode]", $("#v-shop")).forEach(b => b.onclick = () => {
+    shopMode = b.dataset.mode; viewShop(); window.scrollTo(0, 0);
+  });
+}
+
+/* 一件の顛末 */
+function openDone(id){
+  const r = DB.reqs.find(x => x.id === id); if(!r) return;
+  const plan = r.plan * r.qty, d = r.actual - plan;
+  const cx = r.status === "canceled";
+  const t  = DB.txns.find(x => x.ref === r.id && x.kind === r.kind);
+  const row = (k, v) => `<div class="item"><div class="grow muted">${k}</div><div style="text-align:right;font-weight:700">${v}</div></div>`;
+  sheet(`
+    <h3>${esc(r.name)}${r.qty > 1 ? ` ×${r.qty}` : ""}</h3>
+    <div class="muted">${esc(walletLabel(r.kind, r.wid))}／${esc(r.cat)}</div>
+    <div class="card tight" style="margin-top:10px">
+      ${row("たのまれた日", ymd(r.ts))}
+      ${row(cx ? "買えなかった日" : "買った日", r.btime ? ymd(r.btime) : "—")}
+      ${row("お店", esc(shopName(r.shopId)))}
+      ${row("よてい", `${yen(r.plan)}${r.qty>1?` ×${r.qty}　${yen(plan)}`:""}`)}
+      ${cx ? row("けっか", `<span style="color:var(--verm)">買えませんでした</span>`)
+           : row("じつがく", `${yen(r.actual)}${d ? ` <span class="diff ${d>0?"up":"dn"}">（${d>0?"+":"−"}${yen(Math.abs(d))}）</span>` : ""}`)}
+      ${r.staffId ? row("買いに行った職員", esc(walletLabel("staff", r.staffId))) : ""}
+      ${r.advanced ? row("支払い", `<span style="color:var(--verm)">職員の立替</span>`) : ""}
+      ${r.ck ? row("確認した職員", esc(walletLabel("staff", r.ck))) : ""}
+      ${cx ? "" : row("おさいふの引き落とし", t ? `${yen(-t.amt)}　${ymd(t.ts)}` : "—")}
+    </div>
+    ${cx ? `<div class="note">仮おさえは解いてあります。おさいふのお金は減っていません。</div>` : ""}
+    <div class="btns">
+      <button class="btn ghost" data-act="close">とじる</button>
+      ${cx ? `<button class="btn accent" data-act="redo" data-id="${r.id}">もう一度たのむ</button>` : ""}
+    </div>`);
+}
+
 function pendingForFilter(){
   return DB.reqs.filter(r => r.status === "reserved").filter(r =>
     shopFilter === "__all__" ? true : shopFilter === "__none__" ? !r.shopId : r.shopId === shopFilter);
@@ -784,12 +890,16 @@ function applyReceipt(){
   render();
 }
 
+let shopMode = "now";   /* now = かりおさえ中 ／ done = すんだもの */
+
 function viewShop(){
+  if(shopMode === "done"){ viewDone(); return; }
   const pend = DB.reqs.filter(r=>r.status==="reserved");
   const counts = {};
   pend.forEach(r => counts[r.shopId] = (counts[r.shopId]||0) + 1);
 
-  let h = `<div class="chips">
+  let h = modeTabs("now");
+  h += `<div class="chips">
     <button class="chip" data-shop="__all__" aria-pressed="${shopFilter==="__all__"}">ぜんぶ<span class="n">${pend.length}</span></button>`;
   DB.shops.forEach(s => {
     if(!counts[s.id] && shopFilter !== s.id) return;
@@ -859,6 +969,7 @@ function viewShop(){
   bindShop();
 
   function bindShop(){
+    bindMode();
     $$("[data-shop]", $("#v-shop")).forEach(b => b.onclick = () => { shopFilter = b.dataset.shop; viewShop(); });
     $$("[data-chk]", $("#v-shop")).forEach(b => b.onchange = () => {
       b.checked ? checked.add(b.dataset.chk) : checked.delete(b.dataset.chk); viewShop();
@@ -1146,7 +1257,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v2.0 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v2.1 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
@@ -1841,7 +1952,7 @@ document.addEventListener("click", e => {
 
     case "nobuy": {
       const r = DB.reqs.find(x=>x.id===id); if(!r) break;
-      r.status = "canceled"; r.btime = Date.now();
+      r.status = "canceled"; r.btime = Date.now(); r.actual = 0;
       checked.delete(id); delete actualIn[id];
       save(); toast(`${r.name} を「買えなかった」にしました`); render();
       break; }
@@ -1908,6 +2019,12 @@ document.addEventListener("click", e => {
     case "jsonsave": dlFile(JSON.stringify(DB), "application/json", "json"); break;
     case "jsonload": $("#o-json").click(); break;
     case "report": printReport(); break;
+    case "redo": {
+      const r = DB.reqs.find(x => x.id === id); if(!r) break;
+      DB.reqs.push(Object.assign({}, r, {id: uid(), ts: Date.now(), status: "reserved",
+        actual: 0, btime: 0, staffId: "", advanced: false, ck: ""}));
+      save(); closeSheet(); shopMode = "now"; toast(`${r.name} をもう一度たのみました`); render();
+      break; }
 
     case "qrsend": qrSend(b.dataset.kind); break;
     case "qrscan": qrScan(); break;
