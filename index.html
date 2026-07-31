@@ -61,6 +61,10 @@ input,select,textarea{
   width:100%;font:inherit;font-size:calc(16px * var(--fs));color:var(--ink);background:#fff;
   border:1px solid var(--line);border-radius:2px;padding:9px 10px;
 }
+::placeholder{color:#93A2B0;opacity:1}
+select.ph, select.ph option[value=""]{color:#93A2B0;-webkit-text-fill-color:#93A2B0}
+select:not(.ph){color:var(--ink);-webkit-text-fill-color:var(--ink)}
+select option{color:var(--ink)}
 input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--verm);outline-offset:1px}
 textarea{min-height:110px;font-size:calc(12px * var(--fs));font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
 input[type=checkbox]{width:22px;height:22px;accent-color:var(--verm);flex:none}
@@ -268,7 +272,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v2.1
+   おかいもの帖  v2.2
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -427,8 +431,10 @@ function viewRequest(){
   const kids = DB.children.filter(c=>!c.hidden);
   const pend = DB.reqs.filter(r=>r.status==="reserved").sort((a,b)=>b.ts-a.ts);
 
+  const noWallet = !(reqForm.kind === "common" || (reqForm.kind === "child" && reqForm.wid));
   const walletOpts =
-    kids.map(c=>`<option value="child:${c.id}" ${reqForm.kind==="child"&&reqForm.wid===c.id?"selected":""}>${esc(c.name)}（つかえる ${yen(availOf("child",c.id))}）</option>`).join("")
+    `<option value="" ${noWallet?"selected":""}>— えらんでください —</option>`
+    + kids.map(c=>`<option value="child:${c.id}" ${reqForm.kind==="child"&&reqForm.wid===c.id?"selected":""}>${esc(c.name)}（つかえる ${yen(availOf("child",c.id))}）</option>`).join("")
     + `<option value="common:" ${reqForm.kind==="common"?"selected":""}>みんなのおさいふ（つかえる ${yen(availOf("common",""))}）</option>`;
 
   const shopOpts = `<option value="">お店みてい</option>` +
@@ -445,13 +451,13 @@ function viewRequest(){
       <span class="tag">よてい額でかりおさえ</span>
     </div>
     <label for="f-wallet">だれのお金で買う</label>
-    <select id="f-wallet">${walletOpts || `<option value="common:">みんなのおさいふ</option>`}</select>
+    <select id="f-wallet" class="${noWallet?"ph":""}">${walletOpts}</select>
 
     <label for="f-shop">どのお店で</label>
-    <select id="f-shop">${shopOpts}</select>
+    <select id="f-shop" class="${reqForm.shopId?"":"ph"}">${shopOpts}</select>
 
     <label for="f-item">とうろく済みの商品からえらぶ</label>
-    <select id="f-item">${itemOpts}</select>
+    <select id="f-item" class="${reqForm.itemId?"":"ph"}">${itemOpts}</select>
 
     <label for="f-name">商品名</label>
     <input id="f-name" type="text" value="${esc(reqForm.name)}" placeholder="例）いちごポッキー">
@@ -501,7 +507,12 @@ function viewRequest(){
   }
   $("#v-request").innerHTML = h;
 
-  $("#f-wallet").onchange = e => { const [k,w] = e.target.value.split(":"); reqForm.kind = k; reqForm.wid = w || ""; };
+  $("#f-wallet").onchange = e => {
+    const v = e.target.value;
+    e.target.classList.toggle("ph", !v);
+    if(!v){ reqForm.kind = "child"; reqForm.wid = ""; return; }
+    const [k,w] = v.split(":"); reqForm.kind = k; reqForm.wid = w || "";
+  };
   $("#f-shop").onchange = e => { reqForm.shopId = e.target.value; reqForm.itemId = ""; grab(); viewRequest(); };
   $("#f-item").onchange = e => {
     grab(); reqForm.itemId = e.target.value;
@@ -526,7 +537,11 @@ function addRequest(){
   const plan = Math.round(Number(reqForm.plan)||0);
   if(!name){ toast("商品名を入れてください"); $("#f-name").focus(); return; }
   if(plan <= 0){ toast("よてい単価を入れてください"); $("#f-plan").focus(); return; }
-  if(reqForm.kind === "child" && !reqForm.wid){ toast("だれのお金で買うか選んでください"); return; }
+  if(!(reqForm.kind === "common" || (reqForm.kind === "child" && reqForm.wid))){
+    toast("だれのお金で買うか、えらんでください");
+    const el = $("#f-wallet"); if(el){ el.focus(); el.scrollIntoView({block:"center"}); }
+    return;
+  }
 
   const total = plan * reqForm.qty;
   const a = availOf(reqForm.kind, reqForm.wid);
@@ -540,7 +555,7 @@ function addRequest(){
     status:"reserved", actual:0, btime:0, staffId:"", advanced:false
   });
   save();
-  reqForm.name = ""; reqForm.plan = ""; reqForm.qty = 1; reqForm.itemId = "";
+  reqForm.name = ""; reqForm.plan = ""; reqForm.qty = 1; reqForm.itemId = "";   /* だれの・どの店 は残す */
   toast(`${name} をかりおさえしました`);
   render();
 }
@@ -1257,7 +1272,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v2.1 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v2.2 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
