@@ -136,6 +136,27 @@ nav.tabs .badge{
 .warnbox{border:1px solid var(--verm);background:rgba(201,71,46,.06);color:var(--verm);font-size:12.5px;padding:8px 10px;border-radius:2px;margin:8px 0}
 hr.sep{border:0;border-top:1px dashed var(--line);margin:16px 0}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+.sclist{border:2px solid var(--ink);border-top:0;border-radius:0 0 3px 3px;background:var(--paper);
+  max-height:46vh;overflow:auto;-webkit-overflow-scrolling:touch}
+.sclist .hd{position:sticky;top:0;background:var(--ink);color:#fff;font-size:11.5px;font-weight:700;
+  letter-spacing:.08em;padding:6px 12px;z-index:2}
+.scr{display:flex;align-items:center;gap:9px;padding:10px 12px;border-bottom:1px dashed var(--line-soft);
+  transition:transform .38s ease, opacity .38s ease, background-color .3s}
+.scr:last-child{border-bottom:0}
+.scr .who{flex:none;font-size:10.5px;border:1px solid var(--ink);color:var(--ink);border-radius:2px;
+  padding:1px 6px;font-weight:700;white-space:nowrap}
+.scr .nm{flex:1;min-width:0;font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scr .pr{flex:none;font-variant-numeric:tabular-nums;font-size:14px;color:var(--ink-soft)}
+.scr.done{opacity:.42;background:#EEF4F0}
+.scr.done .nm{text-decoration:line-through;text-decoration-thickness:2px}
+.scr.done .who{border-color:var(--ok);color:var(--ok)}
+.scr.just{background:#D8EDE0;animation:scpop .42s ease-out}
+@keyframes scpop{0%{transform:scale(1.04)}60%{transform:scale(1)}100%{transform:scale(1)}}
+.scempty{padding:22px 12px;text-align:center;color:var(--ink-soft);font-size:13px}
+.scdone{padding:20px 12px;text-align:center;color:var(--ok);font-size:17px;font-weight:700}
+#scflash{position:fixed;inset:0;z-index:55;pointer-events:none;opacity:0;background:var(--ok)}
+#scflash.on{animation:scfl .34s ease-out}
+@keyframes scfl{0%{opacity:.34}100%{opacity:0}}
 .scmsg{white-space:pre-line;font-size:15px;font-weight:700;line-height:1.5;
   background:var(--paper);border:2px solid var(--ink);border-radius:0 0 3px 3px;border-top:0;
   padding:11px 12px;min-height:3.4em;color:var(--ink)}
@@ -196,6 +217,7 @@ hr.sep{border:0;border-top:1px dashed var(--line);margin:16px 0}
 </nav>
 
 <div id="veil" hidden><div class="sheet" id="sheet"></div></div>
+<div id="scflash"></div>
 <div id="toast"></div>
 
 <script>/*! qrcode-generator v2.0.4 | MIT | (c) Kazuhiko Arase */
@@ -1237,6 +1259,7 @@ function openScan(o){
       <div style="position:absolute;inset:${o.ring||"14% 10%"};border:3px solid rgba(255,255,255,.85);border-radius:4px;pointer-events:none"></div>
     </div>
     <div id="sc-n" class="scmsg">カメラを向けてください</div>
+    ${o.list ? `<div class="sclist" id="sc-list"></div>` : ""}
     <div id="sc-act"></div>
     <div class="muted small">${o.hint||""}</div>
     <div class="btns" style="flex-direction:column">
@@ -1304,11 +1327,63 @@ const BARCODES = ["EAN_13", "EAN_8", "UPC_A", "UPC_E", "CODE_128", "ITF"];
 function scanBuy(){
   openScan({
     title: "バーコードで消し込む",
+    list: true,
+    hint: `リングの中でくっきり見える距離（10〜20cm）で、数秒じっと止めてください。`,
     formats: BARCODES,
-    hint: `リングの中でバーコードがくっきり見える距離（10〜20cm）で、数秒じっと止めてください。<br>
-      <b>缶やペットボトルのような丸い面は読み取りにくくなります。</b>平らな面を選んでください。`,
     onText: code => bcHit(code)
   });
+  bcList();
+}
+
+/* ---- 買うものの一覧を、映像の下にそのまま出す ---- */
+function bcRows(){
+  return DB.reqs.filter(r => r.status === "reserved")
+    .sort((a, b) => (checked.has(a.id) - checked.has(b.id))          /* 済みは下へ */
+                 || (a.shopId + a.name).localeCompare(b.shopId + b.name, "ja"));
+}
+function bcList(justId){
+  const el = $("#sc-list"); if(!el) return;
+  const rows = bcRows();
+  const left = rows.filter(r => !checked.has(r.id)).length;
+
+  if(!rows.length){ el.innerHTML = `<div class="scempty">かりおさえ中の買い物がありません。</div>`; return; }
+  el.innerHTML =
+    `<div class="hd">${left ? `のこり ${left}件　／　ぜんぶで ${rows.length}件` : "ぜんぶ そろいました"}</div>` +
+    (left ? "" : `<div class="scdone">✓ ぜんぶ そろいました</div>`) +
+    rows.map(r => {
+      const done = checked.has(r.id);
+      return `<div class="scr${done ? " done" : ""}${r.id === justId ? " just" : ""}" data-row="${r.id}">
+        <span class="who">${esc(walletLabel(r.kind, r.wid))}</span>
+        <span class="nm">${esc(r.name)}${r.qty > 1 ? ` ×${r.qty}` : ""}</span>
+        <span class="pr">${yen(r.plan * r.qty)}</span>
+      </div>`;
+    }).join("");
+  const j = justId && el.querySelector(`[data-row="${justId}"]`);
+  if(j) j.scrollIntoView({block: "nearest"});
+}
+
+/* 目・耳・手 の三つで知らせる */
+function bcSign(ok){
+  const f = $("#scflash");
+  if(f){ f.style.background = ok ? "#3C7A5A" : "#C9472E"; f.classList.remove("on"); void f.offsetWidth; f.classList.add("on"); }
+  if(navigator.vibrate) try{ navigator.vibrate(ok ? 55 : [50, 60, 50]); }catch(e){}
+  beep(ok);
+}
+let AC = null;
+function beep(ok){
+  try{
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if(AC.state === "suspended") AC.resume();
+    const t = AC.currentTime;
+    const g = AC.createGain(); g.connect(AC.destination);
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.exponentialRampToValueAtTime(.16, t + .012);
+    g.gain.exponentialRampToValueAtTime(.0001, t + (ok ? .12 : .26));
+    const o = AC.createOscillator(); o.type = "square"; o.connect(g);
+    if(ok) o.frequency.setValueAtTime(2000, t);
+    else { o.frequency.setValueAtTime(420, t); o.frequency.setValueAtTime(300, t + .13); }
+    o.start(t); o.stop(t + (ok ? .13 : .28));
+  }catch(e){}
 }
 
 /* 読んだ番号をどう扱うか
@@ -1319,8 +1394,8 @@ function bcHit(code){
   const all = DB.reqs.filter(r => r.status === "reserved");
 
   if(!it){
-    SCAN.paused = true;
-    scanMsg(`読めました　${code}\n▲ この番号の商品は、まだとうろくされていません。`, "ng");
+    SCAN.paused = true; bcSign(false);
+    scanMsg(`とうろくにない番号です　${code}`, "ng");
     scanAct(`
       <label for="sc-pick" style="margin-top:4px">いま持っているのは、どの品ですか</label>
       <select id="sc-pick">
@@ -1341,13 +1416,13 @@ function bcHit(code){
 
   if(open.length){ bcCheck(open[0], it); return; }
 
-  /* なぜ消せないのかを、はっきり言う */
   if(mine.length){
-    scanMsg(`読めました　${code}\n✓ ${it.name} は ${mine.length}件とも、もうチェックずみです。`, "ok");
+    bcSign(false);
+    scanMsg(`${it.name}　${mine.length}件とも、もう消しました`, "ok");
     return;
   }
-  SCAN.paused = true;
-  scanMsg(`読めました　${code}\n▲ ${it.name} は、だれもたのんでいません。`, "ng");
+  SCAN.paused = true; bcSign(false);
+  scanMsg(`${it.name}　だれもたのんでいません`, "ng");
   scanAct(`
     <div class="muted small" style="margin-top:4px">買うものに足しますか。だれのお金で買うかをえらんでください。</div>
     <select id="sc-who" style="margin-top:4px">
@@ -1373,20 +1448,18 @@ function bcAdd(itemId){
   DB.reqs.push(r);
   scanAct(""); SCAN.paused = false;
   bcCheck(r, it);
-  toast(`${it.name} を足しました`);
 }
 
-/* チェックを入れて、同じ品の残りを知らせる */
+/* チェックを入れる — 説明せず、一覧の上で消してみせる */
 function bcCheck(hit, it){
   checked.add(hit.id);
+  save();
+  bcSign(true);
   const rest = DB.reqs.filter(r => r.status === "reserved" && !checked.has(r.id));
   const same = rest.filter(r => (r.itemId && r.itemId === it.id) || norm(r.name) === norm(it.name)).length;
-  const otherShop = shopFilter !== "__all__" && hit.shopId !== shopFilter;
-  scanMsg(`✓ ${it.name} → ${walletLabel(hit.kind, hit.wid)}　のこり ${rest.length}件`
-    + (otherShop ? `\n（${shopName(hit.shopId)} の品です）` : "")
-    + (same ? `\n▲ 同じ商品をあと ${same}人ぶん たのまれています。もう一度読ませてください。` : ""), "ok");
-  save();
-  if(!rest.length) setTimeout(() => { closeScan(); toast("ぜんぶチェックできました"); render(); }, 900);
+  scanMsg(same ? `${it.name}　同じものが あと ${same}件` : `${it.name}`, "ok");
+  bcList(hit.id);
+  if(!rest.length) setTimeout(() => { closeScan(); toast("ぜんぶ そろいました"); }, 1900);
 }
 
 /* 読んだ番号を、リストの品に結びつけて覚える */
@@ -1409,6 +1482,7 @@ function bcBind(code){
   SCAN.paused = false;
   bcCheck(r, it);
   toast(`${it.name} におぼえました`);
+  bcList(r.id);
 }
 
 function scanAct(html){ const el = $("#sc-act"); if(el) el.innerHTML = html; }
@@ -1822,7 +1896,7 @@ document.addEventListener("click", e => {
     case "scantest": scanTest(); break;
     case "bcbind": bcBind(b.dataset.code); break;
     case "bcadd": bcAdd(b.dataset.id); break;
-    case "bcskip": scanAct(""); if(SCAN){ SCAN.paused = false; SCAN.lastText = ""; } scanMsg("カメラを向けてください"); break;
+    case "bcskip": scanAct(""); if(SCAN){ SCAN.paused = false; SCAN.lastText = ""; } scanMsg("カメラを向けてください"); bcList(); break;
     case "scanjan": scanJan(); break;
     case "sctorch": scanTorch(); break;
     case "scclose": closeScan(); break;
