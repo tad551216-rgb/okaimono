@@ -69,7 +69,8 @@ select:not(.ph){color:var(--ink);-webkit-text-fill-color:var(--ink)}
 select option{color:var(--ink)}
 input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--verm);outline-offset:1px}
 textarea{min-height:110px;font-size:calc(12px * var(--fs));font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
-textarea.plain{font-family:inherit;font-size:calc(15px * var(--fs));word-break:normal;line-height:1.6;min-height:150px}
+textarea.plain{font-family:inherit;font-size:calc(15px * var(--fs));word-break:normal;line-height:1.7;
+  min-height:210px;padding:12px}
 input[type=checkbox]{width:22px;height:22px;accent-color:var(--verm);flex:none}
 .btn{
   font:inherit;font-size:calc(14px * var(--fs));font-weight:700;letter-spacing:.04em;cursor:pointer;
@@ -290,7 +291,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v2.8
+   おかいもの帖  v2.9
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -805,23 +806,30 @@ function drawReceipt(){
                 (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     sheet(`
       <h3>レシートを読む</h3>
-      <div class="muted">${esc(where)}／かりおさえ ${pool.length}件</div>
-      <div class="note">${ios
-        ? "空の欄を長押しすると「テキストをスキャン」が出ます。カメラをレシートに向けると文字が入ります。<br>出ないときは、キーボードの絵文字キーのとなり、または「あA」の長押しからもお使いいただけます。"
-        : "キーボードのカメラ（レンズ）から文字を読み取って貼り付けます。"}
-        手で打っていただいてもかまいません。読み取りは端末の中だけで行われます。</div>
-      <label for="r-text">レシートの文字</label>
+      <div class="muted small">${esc(where)}／かりおさえ ${pool.length}件</div>
+
+      <label for="r-text" style="margin-top:10px">レシートの文字</label>
       <textarea id="r-text" class="plain" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false"
         placeholder="いちごポッキー　168&#10;ポテトチップス　128&#10;合計　296"></textarea>
-      <div class="btns">
-        <button class="btn ghost" data-act="close">やめる</button>
-        <button class="btn accent" data-act="doparse">読み取る</button>
+
+      <div class="btns" style="margin-top:8px">
+        <button class="btn ghost grow" data-act="rcpaste">📋 貼り付け</button>
+        <button class="btn ghost grow" data-act="rcclear">消す</button>
       </div>
-      <hr class="sep">
-      <div class="muted small">長押しでうまくいかないときは、こちらから。</div>
-      <div class="btns"><button class="btn ghost" data-act="rcpaste">📋 コピーしたものを貼り付ける</button></div>
-      <div class="muted small">ほかのアプリ（カメラや写真アプリの文字認識、メモ帳など）で読み取ってコピーしておけば、ここから入ります。</div>`);
-    setTimeout(() => { const t = $("#r-text"); if(t) t.focus(); }, 80);
+      <div class="btns">
+        <button class="btn ghost grow" data-act="close">やめる</button>
+        <button class="btn accent grow" data-act="doparse">読み取る</button>
+      </div>
+
+      <details class="acc" style="margin-top:12px"><summary>文字の入れかた</summary>
+        <div class="body">
+          <div class="note" style="margin-top:10px">${ios
+            ? "<b>空の欄を長押し</b>すると「テキストをスキャン」が出ます。カメラをレシートに向けると文字が入ります。<br><br>出てこないときは、キーボードを一度閉じてから長押ししてください。欄が小さいと、iPhoneがこの項目を省くことがあります。"
+            : "キーボードのカメラ（レンズ）から文字を読み取って貼り付けます。"}</div>
+          <div class="note">それでも出ないときは、<b>カメラアプリや写真アプリの文字認識</b>で読み取ってコピーし、上の「📋 貼り付け」から入れてください。</div>
+          <div class="muted small">手で打っていただいてもかまいません。読み取りは端末の中だけで行われます。</div>
+        </div>
+      </details>`);
     return;
   }
 
@@ -1304,7 +1312,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v2.8 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v2.9 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
@@ -2018,6 +2026,7 @@ document.addEventListener("click", e => {
     case "dofix": doFix(); break;
     case "receipt": openReceipt(); break;
     case "doparse": doParse(); break;
+    case "rcclear": { const el = $("#r-text"); if(el){ el.value = ""; el.focus(); } break; }
     case "rcpaste": {
       const el = $("#r-text"); if(!el) break;
       if(!(navigator.clipboard && navigator.clipboard.readText)){
