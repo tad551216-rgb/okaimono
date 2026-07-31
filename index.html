@@ -1074,7 +1074,7 @@ function viewSet(){
     <div class="body">
       <div class="muted small" style="padding-top:8px">入力した内容は<b>すべてこの端末の中だけ</b>に保存されます。端末を初期化すると記録も消えますので、「出力」タブでバックアップをお取りください。</div>
       <div class="btns"><button class="btn ghost" data-act="sample">🧪 サンプルデータを入れて試す</button></div>
-      <div class="muted small">架空のこども4名・お店2件・商品6品と、預り金の記録が入ります。<b>いまのデータはすべて置き換わります。</b></div>
+      <div class="muted small">架空のこども4名・お店2件・商品6品と、預り金の記録が入ります。商品にはバーコードも付いていますので、<b>sample-barcodes.html</b> を印刷すれば、お店に行かなくても消し込みを試せます。<b>いまのデータはすべて置き換わります。</b></div>
       <div class="btns"><button class="btn ghost" style="color:var(--verm);border-color:var(--verm)" data-act="wipe">🗑 すべてのデータを消す</button></div>
       <div class="muted small">こども・記録・とうろくをすべて消します。合言葉と事業所名は残ります。</div>
     </div>
@@ -1186,7 +1186,7 @@ function openScan(o){
   SCAN = o;
   sheet(`
     <h3>${esc(o.title)}</h3>
-    <div class="muted" id="sc-n">カメラを向けてください</div>
+    <div class="muted" id="sc-n" style="white-space:pre-line;min-height:2.6em">カメラを向けてください</div>
     <div style="position:relative;margin:10px 0">
       <video id="sc-v" playsinline muted style="width:100%;background:#000;border-radius:3px"></video>
       <div style="position:absolute;inset:${o.ring||"14% 10%"};border:3px solid rgba(255,255,255,.85);border-radius:4px;pointer-events:none"></div>
@@ -1250,9 +1250,11 @@ function scanBuy(){
                   rest.find(r => norm(r.name) === norm(it.name));
       if(!hit){ scanMsg(`${it.name}：買うリストにありません`); return; }
       checked.add(hit.id);
-      const left = pendingForFilter().filter(r => !checked.has(r.id)).length;
-      scanMsg(`✓ ${it.name} → ${walletLabel(hit.kind, hit.wid)}　のこり ${left}件`);
-      if(!left) setTimeout(() => { closeScan(); toast("ぜんぶチェックできました"); render(); }, 900);
+      const rest2 = pendingForFilter().filter(r => !checked.has(r.id));
+      const same = rest2.filter(r => (r.itemId && r.itemId === it.id) || norm(r.name) === norm(it.name)).length;
+      scanMsg(`✓ ${it.name} → ${walletLabel(hit.kind, hit.wid)}　のこり ${rest2.length}件`
+        + (same ? `\n▲ 同じ商品をあと ${same}人ぶん たのまれています。もう一度読ませてください。` : ""));
+      if(!rest2.length) setTimeout(() => { closeScan(); toast("ぜんぶチェックできました"); render(); }, 900);
     }
   });
 }
@@ -1358,12 +1360,12 @@ function loadSample(){
   const S = [{id: uid(), name: "スーパーやまと"}, {id: uid(), name: "ドラッグいずみ"}];
   const T = [{id: uid(), name: "やまと"}, {id: uid(), name: "いずみ"}];
   const I = [
-    {shopId: S[0].id, name: "いちごポッキー", price: 168, cat: "おやつ"},
-    {shopId: S[0].id, name: "ポテトチップス うすしお", price: 128, cat: "おやつ"},
-    {shopId: S[0].id, name: "ツナマヨおにぎり", price: 150, cat: "昼食"},
-    {shopId: S[0].id, name: "からあげ弁当", price: 398, cat: "昼食"},
-    {shopId: S[1].id, name: "牛乳", price: 218, cat: "その他"},
-    {shopId: S[1].id, name: "ゼリー", price: 98, cat: "おやつ"},
+    {shopId: S[0].id, name: "いちごポッキー",           price: 168, cat: "おやつ",  jan: "4901234567894"},
+    {shopId: S[0].id, name: "ポテトチップス うすしお", price: 128, cat: "おやつ",  jan: "4902345678905"},
+    {shopId: S[0].id, name: "ツナマヨおにぎり",         price: 150, cat: "昼食",    jan: "4903456789016"},
+    {shopId: S[0].id, name: "からあげ弁当",             price: 398, cat: "昼食",    jan: "4904567890127"},
+    {shopId: S[1].id, name: "牛乳",                     price: 218, cat: "その他",  jan: "4905678901238"},
+    {shopId: S[1].id, name: "ゼリー",                   price:  98, cat: "おやつ",  jan: "4906789012349"},
   ].map(x => Object.assign({id: uid()}, x));
 
   D.children = K; D.shops = S; D.staff = T; D.items = I;
@@ -1372,17 +1374,17 @@ function loadSample(){
   });
   D.txns.push({id: uid(), ts: now - day*20, kind: "common", wid: "", amt: 10000, memo: "共通おやつ代の補充", ref: "", ck: T[1].id});
   [[0, 0, 168], [1, 1, 128], [2, 3, 398]].forEach(([ki, ii, amt]) => {
-    const r = {id: uid(), ts: now - day*7, kind: "child", wid: K[ki].id, shopId: I[ii].shopId, name: I[ii].name,
+    const r = {id: uid(), ts: now - day*7, kind: "child", wid: K[ki].id, shopId: I[ii].shopId, itemId: I[ii].id, name: I[ii].name,
                plan: I[ii].price, qty: 1, cat: I[ii].cat, status: "bought", actual: amt, btime: now - day*7,
                staffId: T[0].id, advanced: false};
     D.reqs.push(r);
     D.txns.push({id: uid(), ts: now - day*7, kind: "child", wid: K[ki].id, amt: -amt, memo: I[ii].name, ref: r.id, ck: T[1].id});
   });
   [[3, 5, 1], [0, 4, 1], [1, 2, 2]].forEach(([ki, ii, q]) => {
-    D.reqs.push({id: uid(), ts: now - day, kind: "child", wid: K[ki].id, shopId: I[ii].shopId, name: I[ii].name,
+    D.reqs.push({id: uid(), ts: now - day, kind: "child", wid: K[ki].id, shopId: I[ii].shopId, itemId: I[ii].id, name: I[ii].name,
                  plan: I[ii].price, qty: q, cat: I[ii].cat, status: "reserved", actual: 0, btime: 0, staffId: "", advanced: false});
   });
-  D.reqs.push({id: uid(), ts: now - day, kind: "common", wid: "", shopId: S[0].id, name: "みんなのゼリー",
+  D.reqs.push({id: uid(), ts: now - day, kind: "common", wid: "", shopId: I[5].shopId, itemId: I[5].id, name: "ゼリー",
                plan: 98, qty: 8, cat: "おやつ", status: "reserved", actual: 0, btime: 0, staffId: "", advanced: false});
   DB = D; checked.clear(); save();
   toast("サンプルを入れました");
