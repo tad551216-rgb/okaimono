@@ -4,7 +4,7 @@
    版を上げるときは CACHE の番号だけを変えてください。
    古いキャッシュは自動で捨てられます。                       */
 
-const CACHE = "okaimono-3.3";
+const CACHE = "okaimono-3.4";
 
 const ASSETS = [
   "./",

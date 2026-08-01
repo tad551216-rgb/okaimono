@@ -291,7 +291,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v3.3
+   おかいもの帖  v3.4
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -1289,7 +1289,7 @@ function viewSet(){
   <details class="acc"><summary>お店　<span class="muted">${DB.shops.length}件</span></summary>
     <div class="body">
       <label for="m-shop">お店の名前</label>
-      <input id="m-shop" type="text" placeholder="例）スーパーやまと 泉大津店">
+      <input id="m-shop" type="text" placeholder="例）スーパーみどり 泉大津店">
       <div class="btns"><button class="btn mini accent" data-act="addshop">追加する</button></div>
       ${DB.shops.map(x=>`<div class="mrow">
         <div class="grow">${esc(x.name)} <span class="muted small">商品 ${DB.items.filter(i=>i.shopId===x.id).length}</span></div>
@@ -1326,7 +1326,7 @@ function viewSet(){
   <details class="acc"><summary>職員　<span class="muted">${DB.staff.length}人</span></summary>
     <div class="body">
       <label for="m-staff">職員の名前</label>
-      <input id="m-staff" type="text" placeholder="例）やまと">
+      <input id="m-staff" type="text" placeholder="例）やまだ">
       <div class="btns"><button class="btn mini accent" data-act="addstaff">追加する</button></div>
       ${DB.staff.map(x=>`<div class="mrow">
         <div class="grow">${esc(x.name)}</div>
@@ -1350,7 +1350,7 @@ function viewSet(){
   <details class="acc"><summary>事業所</summary>
     <div class="body">
       <label for="c-office">事業所の名前（報告書に表示）</label>
-      <input id="c-office" type="text" value="${esc(c.office)}" placeholder="放課後等デイサービス やまと">
+      <input id="c-office" type="text" value="${esc(c.office)}" placeholder="放課後等デイサービス とまと">
       <div class="btns"><button class="btn mini accent" data-act="saveconf">保存</button></div>
     </div>
   </details>
@@ -1406,7 +1406,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v3.3 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v3.4 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
@@ -1948,12 +1948,13 @@ function printReport(){
    ============================================================ */
 function loadSample(){
   if(!confirm("いまのデータはすべて置き換わります。よろしいですか？")) return;
-  const conf = DB.conf;
+  const conf = Object.assign({}, DB.conf);
+  if(!conf.office) conf.office = "放課後デイサービス　とまと";
   const D = blank(); D.conf = conf;
   const day = 86400000, now = Date.now();
   const K = ["たろうくん", "はなちゃん", "けんとくん", "ゆいちゃん"].map(n => ({id: uid(), name: n, memo: "", hidden: false}));
-  const S = [{id: uid(), name: "スーパーやまと"}, {id: uid(), name: "ドラッグいずみ"}];
-  const T = [{id: uid(), name: "やまと"}, {id: uid(), name: "いずみ"}];
+  const S = [{id: uid(), name: "スーパーみどり"}, {id: uid(), name: "ドラッグあおば"}];
+  const T = [{id: uid(), name: "やまだ"}, {id: uid(), name: "すずき"}];
   const I = [
     {shopId: S[0].id, name: "いちごポッキー",           price: 168, cat: "おやつ",  jan: "4901234567894"},
     {shopId: S[0].id, name: "ポテトチップス うすしお", price: 128, cat: "おやつ",  jan: "4902345678905"},
