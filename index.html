@@ -154,6 +154,7 @@ nav.tabs .badge{
 #veil[hidden]{display:none}
 .sheet{background:var(--cream);width:100%;max-width:520px;max-height:88vh;overflow:auto;border-top:3px solid var(--ink);border-radius:4px 4px 0 0;padding:16px 14px calc(18px + env(safe-area-inset-bottom))}
 .sheet h3{margin:0 0 2px;font-size:calc(17px * var(--fs))}
+.sheet .btns{margin-top:8px}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(78px + env(safe-area-inset-bottom));z-index:50;background:var(--ink);color:#fff;font-size:calc(13px * var(--fs));font-weight:700;padding:9px 16px;border-radius:2px;opacity:0;transition:opacity .2s;pointer-events:none}
 #toast.on{opacity:1}
 .note{font-size:calc(12px * var(--fs));color:var(--ink-soft);border-left:3px solid var(--line);padding:2px 0 2px 9px;margin:8px 0}
@@ -198,10 +199,11 @@ hr.sep{border:0;border-top:1px dashed var(--line);margin:16px 0}
 #scflash.on{animation:scfl .34s ease-out}
 @keyframes scfl{0%{opacity:.34}100%{opacity:0}}
 .haslist #sc-v{height:26vh;min-height:150px;object-fit:cover}
+#sc-v{height:22vh;min-height:130px;object-fit:cover}
 .sheet{display:flex;flex-direction:column}
-.scmsg{white-space:pre-line;font-size:calc(17px * var(--fs));font-weight:700;line-height:1.45;
+.scmsg{white-space:pre-line;font-size:calc(16px * var(--fs));font-weight:700;line-height:1.4;
   background:var(--paper);border:2px solid var(--ink);border-radius:0 0 3px 3px;border-top:0;
-  padding:11px 13px;color:var(--ink)}
+  padding:9px 12px;color:var(--ink)}
 .scmsg:empty{display:none}
 .scmsg.ok{background:#EAF3ED;border-color:var(--ok);color:var(--ok)}
 .scmsg.ng{background:#FBEEEA;border-color:var(--verm);color:var(--verm)}
@@ -291,7 +293,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v3.5
+   おかいもの帖  v3.7
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -795,87 +797,8 @@ function parseReceipt(text){
   return {lines, total, tax};
 }
 
-/* ------------------------------------------------------------
-   写真からレシートの文字を読む（端末の中だけで処理します）
-   ------------------------------------------------------------ */
-let OCR = null;
 
-function ocrSay(t){ const el = $("#rc-prog"); if(el) el.textContent = t; }
 
-async function ocrImage(file){
-  ocrSay("したくをしています…");
-  let worker;
-  try{
-    if(!window.Tesseract) await loadScript("ocr/tesseract.min.js");
-    worker = OCR || (OCR = await Tesseract.createWorker("jpn", 1, {
-      workerPath: "ocr/worker.min.js",
-      corePath:   "ocr/tesseract-core-lstm.wasm.js",
-      langPath:   "ocr",
-      gzip: true,
-      logger: m => {
-        if(m.status === "recognizing text") ocrSay(`読んでいます… ${Math.round(m.progress*100)}%`);
-        else if(/loading|initializing/.test(m.status)) ocrSay("したくをしています…（はじめの一回だけ時間がかかります）");
-      }
-    }));
-  }catch(e){
-    ocrSay("読み取りのしくみを用意できませんでした。電波のあるところで一度お試しください。");
-    return;
-  }
-  try{
-    ocrSay("画像をととのえています…");
-    const url = await prepImage(file);
-    const { data } = await worker.recognize(url);
-    URL.revokeObjectURL(url);
-    const t = (data && data.text || "").trim();
-    if(!t){ ocrSay("文字が読み取れませんでした。明るいところで、まっすぐ撮ってみてください。"); return; }
-    const el = $("#r-text");
-    el.value = (el.value ? el.value + "\n" : "") + t;
-    const n = t.split(/\r?\n/).filter(x => x.trim()).length;
-    ocrSay(`${n}行を読みました。ちがっていたら直してから「読み取る」を押してください。`);
-  }catch(e){
-    ocrSay("うまく読めませんでした。もう一度お試しください。");
-  }
-}
-
-/* 感熱紙は文字が細い。大きくして、白黒をはっきりさせる */
-function prepImage(file){
-  return new Promise((ok, ng) => {
-    const img = new Image();
-    img.onload = () => {
-      const W = 1600;
-      const sc = Math.min(2.4, Math.max(1, W / img.naturalWidth));
-      const cv = document.createElement("canvas");
-      cv.width = Math.round(img.naturalWidth * sc);
-      cv.height = Math.round(img.naturalHeight * sc);
-      const g = cv.getContext("2d");
-      g.drawImage(img, 0, 0, cv.width, cv.height);
-      const d = g.getImageData(0, 0, cv.width, cv.height), a = d.data;
-      let sum = 0;
-      for(let i = 0; i < a.length; i += 4){
-        const v = (a[i]*299 + a[i+1]*587 + a[i+2]*114) / 1000;
-        a[i] = a[i+1] = a[i+2] = v; sum += v;
-      }
-      const mid = sum / (a.length/4);
-      for(let i = 0; i < a.length; i += 4){       /* 明暗をひろげる */
-        const v = a[i] < mid ? Math.max(0, (a[i]-mid)*1.7 + mid) : Math.min(255, (a[i]-mid)*1.7 + mid);
-        a[i] = a[i+1] = a[i+2] = v;
-      }
-      g.putImageData(d, 0, 0);
-      cv.toBlob(b => ok(URL.createObjectURL(b)), "image/png");
-      URL.revokeObjectURL(img.src);
-    };
-    img.onerror = ng;
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-function loadScript(src){
-  return new Promise((ok, ng) => {
-    const el = document.createElement("script");
-    el.src = src; el.onload = ok; el.onerror = ng;
-    document.head.appendChild(el);
-  });
-}
 
 /* レシート行 × かりおさえ中リクエスト の総当たりから、点数の高い順に割り当てる */
 function matchLines(lines, pool){
@@ -923,40 +846,33 @@ function drawReceipt(){
       <h3>レシートを読む</h3>
       <div class="muted small">${esc(where)}／かりおさえ ${pool.length}件</div>
 
+      <div class="note" style="margin-top:10px">${ios
+        ? "① カメラでレシートを撮る<br>② 写真アプリでその写真を開き、<b>文字を長押し</b><br>③「すべてを選択」→「コピー」<br>④ この帖にもどって、下の「貼り付け」"
+        : "カメラやメモ帳などで文字を読み取ってコピーし、下の「貼り付け」から入れてください。"}</div>
+
       <label for="r-text" style="margin-top:10px">レシートの文字</label>
       <textarea id="r-text" class="plain" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false"
         placeholder="いちごポッキー　168&#10;ポテトチップス　128&#10;合計　296"></textarea>
 
       <div class="btns" style="margin-top:8px">
-        <button class="btn accent grow" data-act="rcshot">📷 レシートを撮る</button>
-        <button class="btn ghost grow" data-act="rcpick">🖼 写真からえらぶ</button>
+        <button class="btn accent grow" data-act="rcpaste">📋 コピーしたものを貼り付ける</button>
+        <button class="btn ghost" data-act="rcclear">消す</button>
       </div>
-      <div class="btns">
-        <button class="btn ghost grow" data-act="rcpaste">📋 貼り付け</button>
-        <button class="btn ghost grow" data-act="rcclear">消す</button>
-      </div>
-      <input type="file" id="rc-cam" accept="image/*" capture="environment" hidden>
-      <input type="file" id="rc-img" accept="image/*" hidden>
-      <div id="rc-prog" class="muted small" style="min-height:1.5em"></div>
       <div class="btns">
         <button class="btn ghost grow" data-act="close">やめる</button>
         <button class="btn accent grow" data-act="doparse">読み取る</button>
       </div>
+      <div class="muted small" style="margin-top:8px">手で打っていただいてもかまいません。読み取りは端末の中だけで行われます。</div>`);
 
-      <details class="acc" style="margin-top:10px"><summary>ほかの入れかた</summary>
-        <div class="body">
-          <div class="note" style="margin-top:10px">カメラアプリや写真アプリの文字認識で読み取ってコピーし、「📋 貼り付け」から入れることもできます。<br>手で打っていただいてもかまいません。</div>
-          <div class="muted small">「📷 レシートを撮る」の読み取りは、すべてこの端末の中で行われます。写真もどこにも送られません。</div>
-        </div>
-      </details>`);
+    /* ひらいたとき、コピーされているものがあれば入れておく */
+    if(navigator.clipboard && navigator.clipboard.readText){
+      navigator.clipboard.readText().then(t => {
+        const el = $("#r-text");
+        if(el && !el.value && t && t.trim() && /\d/.test(t)) el.value = t.trim();
+      }).catch(() => {});
+    }
 
-    const pick = e => {
-      const f = e.target.files && e.target.files[0];
-      e.target.value = "";
-      if(f) ocrImage(f);
-    };
-    $("#rc-cam").onchange = pick;
-    $("#rc-img").onchange = pick;
+
     return;
   }
 
@@ -1440,7 +1356,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v3.5 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v3.7 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
@@ -1569,7 +1485,7 @@ function openScan(o){
   SCAN = o;
   sheet(`
     <h3>${esc(o.title)}</h3>
-    <div style="position:relative;margin:8px 0 0" class="${o.list ? "haslist" : ""}">
+    <div style="position:relative;margin:6px 0 0" class="${o.list ? "haslist" : ""}">
       <video id="sc-v" playsinline muted style="width:100%;background:#000;border-radius:3px;display:block"></video>
       <div style="position:absolute;inset:${o.ring||"14% 10%"};border:3px solid rgba(255,255,255,.85);border-radius:4px;pointer-events:none"></div>
     </div>
@@ -1602,7 +1518,6 @@ function openScan(o){
     try{ if(FGBarcodeScanner.isTorchSupported()) $("#sc-torch").hidden = false; }catch(e){}
   }).catch(() => {});
 }
-window.addEventListener("pagehide", () => { try{ if(OCR) OCR.terminate(); }catch(e){} });
 function scanMsg(t, kind){
   const l = $("#sc-n"); if(!l) return;
   l.textContent = t || "";
@@ -1892,6 +1807,7 @@ function scanJan(){
   openScan({
     title: "バーコードを読む",
     formats: BARCODES,
+    ring: "26% 8%",
     hint: "商品のバーコードを、リングの中に合わせてください。曲がった面でも読めます。",
     onText: code => {
       const dup = DB.items.find(x => x.jan === code);
@@ -2176,8 +2092,6 @@ document.addEventListener("click", e => {
     case "dofix": doFix(); break;
     case "receipt": openReceipt(); break;
     case "doparse": doParse(); break;
-    case "rcshot": $("#rc-cam").click(); break;
-    case "rcpick": $("#rc-img").click(); break;
     case "rcclear": { const el = $("#r-text"); if(el){ el.value = ""; el.focus(); } break; }
     case "rcpaste": {
       const el = $("#r-text"); if(!el) break;

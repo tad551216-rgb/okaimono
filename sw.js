@@ -4,7 +4,7 @@
    版を上げるときは CACHE の番号だけを変えてください。
    古いキャッシュは自動で捨てられます。                       */
 
-const CACHE = "okaimono-3.5";
+const CACHE = "okaimono-3.7";
 
 const ASSETS = [
   "./",
@@ -15,16 +15,6 @@ const ASSETS = [
   "./icon-maskable-512.png"
 ];
 
-/* レシートの読み取りに使うもの。
-   大きい（約8MB）ので、はじめに使ったときに保存します。
-   一度読めば、電波がなくても使えます。 */
-const OCR = [
-  "./ocr/tesseract.min.js",
-  "./ocr/worker.min.js",
-  "./ocr/tesseract-core-lstm.wasm.js",
-  "./ocr/tesseract-core-lstm.wasm",
-  "./ocr/jpn.traineddata.gz"
-];
 
 /* 入れる */
 self.addEventListener("install", e => {
