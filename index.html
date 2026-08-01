@@ -190,9 +190,6 @@ hr.sep{border:0;border-top:1px dashed var(--line);margin:16px 0}
 .rcbar .n{font-size:calc(16px * var(--fs));font-weight:700}
 .rcgo{position:sticky;bottom:0;z-index:6;background:var(--cream);padding:10px 0 2px;margin-top:10px;
   border-top:2px solid var(--ink)}
-.holdbar{display:flex;align-items:center;gap:10px;background:#FDF1EE;border-bottom:2px solid var(--verm);
-  padding:11px 13px;font-size:calc(15px * var(--fs));color:var(--verm)}
-.holdbar .btn{white-space:nowrap}
 .hname{font-size:calc(19px * var(--fs));font-weight:700;line-height:1.3}
 .hname .jan{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .scempty{padding:24px 12px;text-align:center;color:var(--ink-soft);font-size:calc(15px * var(--fs))}
@@ -294,7 +291,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v3.2
+   おかいもの帖  v3.3
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -1409,7 +1406,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v3.2 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v3.3 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
@@ -1608,19 +1605,14 @@ function qrScan(){
   });
 }
 
-let HOLD = [];   /* 読んだが、まだ片づいていないもの */
+let ASK = null;   /* いま決めていただいているもの */
 
 /* バーコードで消し込む */
 const BARCODES = ["EAN_13", "EAN_8", "UPC_A", "UPC_E", "CODE_128", "ITF"];
-function scanBuyResume(){
-  const keep = HOLD.slice();
-  scanBuy();
-  HOLD = keep;
-  setTimeout(() => bcList(), 80);
-}
+function scanBuyResume(){ scanBuy(); }
 
 function scanBuy(){
-  HOLD = [];
+  ASK = null;
   openScan({
     title: "バーコードで消し込む",
     list: true,
@@ -1644,20 +1636,11 @@ function bcList(justId){
   const left = rows.filter(r => !checked.has(r.id)).length;
   let h = "";
 
-  /* 溜まったものは、ここでは件数だけ。片づけは別の画面で */
-  if(HOLD.length){
-    h += `<div class="holdbar">
-      <div class="grow"><b>あとで決めるもの ${HOLD.length}件</b>
-        <div class="muted small">このまま読み続けられます</div></div>
-      <button class="btn mini accent" data-act="holdopen">いま決める</button>
-    </div>`;
-  }
-
-  if(!rows.length && !HOLD.length){
+  if(!rows.length){
     el.innerHTML = `<div class="scempty">かりおさえ中の買い物がありません。</div>`; return;
   }
 
-  if(rows.length){
+  {
     h += `<div class="hd">${left ? `のこり ${left}件　（ぜんぶで ${rows.length}件）` : "✓ ぜんぶ そろいました"}</div>`;
     if(!left) h += `<div class="scdone">✓ ぜんぶ そろいました</div>`;
     h += rows.map(r => {
@@ -1677,35 +1660,6 @@ function bcList(justId){
   if(j2) j2.scrollIntoView({block: "nearest"});
 }
 
-/* 溜まったものを、ゆったりした画面で片づける */
-function holdOpen(){
-  if(!HOLD.length){ toast("決めるものはありません"); return; }
-  const pend = DB.reqs.filter(r => r.status === "reserved" && !checked.has(r.id));
-  const kids = DB.children.filter(c => !c.hidden);
-  sheet(`
-    <h3>あとで決めるもの　${HOLD.length}件</h3>
-    <div class="muted small">読んだけれど、買うものに結びついていないものです。</div>
-    ${HOLD.map(x => `
-      <div class="card" style="margin-top:10px">
-        <div class="hname">${x.kind === "unknown" ? `<span class="jan">${esc(x.code)}</span>` : esc(x.name)}</div>
-        <div class="muted small" style="margin-bottom:8px">${x.kind === "unknown" ? "とうろくにない番号です" : "だれもたのんでいません"}</div>
-        ${x.kind === "unknown"
-          ? `<select data-pick="${esc(x.code)}">
-               <option value="">— どの品ですか —</option>
-               ${pend.map(r => `<option value="${r.id}">${esc(r.name)}${r.qty>1?` ×${r.qty}`:""}／${esc(walletLabel(r.kind, r.wid))}</option>`).join("")}
-             </select>`
-          : `<select data-who="${esc(x.code)}">
-               <option value="">— だれのお金で買いますか —</option>
-               ${kids.map(c => `<option value="child:${c.id}">${esc(c.name)}（つかえる ${yen(availOf("child", c.id))}）</option>`).join("")}
-               <option value="common:">みんなのおさいふ（つかえる ${yen(availOf("common",""))}）</option>
-             </select>`}
-        <div class="btns">
-          <button class="btn accent grow" data-act="${x.kind === "unknown" ? "bcbind" : "bcadd"}" data-code="${esc(x.code)}">${x.kind === "unknown" ? "この品におぼえる" : "買うものに足す"}</button>
-          <button class="btn ghost" data-act="bcdrop" data-code="${esc(x.code)}">けす</button>
-        </div>
-      </div>`).join("")}
-    <div class="btns"><button class="btn ghost" data-act="holdclose">読み取りにもどる</button></div>`);
-}
 
 /* 目・耳・手 の三つで知らせる */
 function bcSign(ok){
@@ -1738,15 +1692,8 @@ function bcHit(code){
   const it  = DB.items.find(x => x.jan && x.jan === code);
   const all = DB.reqs.filter(r => r.status === "reserved");
 
-  /* とうろくにない番号 — 止めずに、上に積んでおく */
-  if(!it){
-    if(HOLD.some(h => h.code === code)){ bcSign(false); scanMsg(`${code}　もう読みました`, "ng"); return; }
-    HOLD.unshift({code, kind: "unknown", name: code});
-    bcSign(false);
-    scanMsg(`とうろくにない番号です　${code}\nあとで決められます。このまま読み続けてください。`, "ng");
-    bcList();
-    return;
-  }
+  /* とうろくにない番号 — いま手に持っているものしか分からないので、その場で決める */
+  if(!it){ askNow({code, kind: "unknown"}); return; }
 
   const same = r => (r.itemId && r.itemId === it.id) || norm(r.name) === norm(it.name);
   const mine = all.filter(same);
@@ -1759,13 +1706,81 @@ function bcHit(code){
     scanMsg(`${it.name}　${mine.length}件とも、もう消しました`, "ok");
     return;
   }
+  askNow({code, kind: "extra", itemId: it.id, name: it.name});
+}
 
-  /* だれもたのんでいない — これも積んでおく */
-  if(HOLD.some(h => h.itemId === it.id)){ bcSign(false); scanMsg(`${it.name}　もう読みました`, "ng"); return; }
-  HOLD.unshift({code, kind: "extra", itemId: it.id, name: it.name, price: it.price});
+/* いま持っているものについて、その場で決めてもらう */
+function askNow(x){
+  ASK = x;
   bcSign(false);
-  scanMsg(`${it.name}　だれもたのんでいません\nあとで決められます。このまま読み続けてください。`, "ng");
-  bcList();
+  try{ FGBarcodeScanner.stop(); }catch(e){}   /* 決めていただく間は、カメラを止める */
+  const pend = DB.reqs.filter(r => r.status === "reserved" && !checked.has(r.id));
+  const kids = DB.children.filter(c => !c.hidden);
+  sheet(`
+    <h3 style="color:var(--verm)">${x.kind === "unknown" ? "とうろくにない番号です" : "だれもたのんでいません"}</h3>
+    <div class="hname" style="margin-top:6px">${x.kind === "unknown"
+      ? `<span class="jan">${esc(x.code)}</span>` : esc(x.name)}</div>
+    <div class="note">いま手に持っているものを、決めてください。<br>
+      あとからでは分からなくなるので、ここで決めてから次に進みます。</div>
+    ${x.kind === "unknown"
+      ? `<label for="ask-sel">この番号は、どの品ですか</label>
+         <select id="ask-sel">
+           <option value="">— えらんでください —</option>
+           ${pend.map(r => `<option value="${r.id}">${esc(r.name)}${r.qty>1?` ×${r.qty}`:""}／${esc(walletLabel(r.kind, r.wid))}</option>`).join("")}
+         </select>`
+      : `<label for="ask-sel">だれのお金で買いますか</label>
+         <select id="ask-sel">
+           <option value="">— えらんでください —</option>
+           ${kids.map(c => `<option value="child:${c.id}">${esc(c.name)}（つかえる ${yen(availOf("child", c.id))}）</option>`).join("")}
+           <option value="common:">みんなのおさいふ（つかえる ${yen(availOf("common",""))}）</option>
+         </select>`}
+    <div class="btns">
+      <button class="btn accent" data-act="askok">${x.kind === "unknown" ? "この品におぼえて、消し込む" : "買うものに足して、消し込む"}</button>
+    </div>
+    <div class="btns" style="margin-top:4px">
+      <button class="btn ghost" data-act="askno">買わない（読み取りにもどる）</button>
+    </div>`);
+}
+
+/* 決めてもらった内容を反映して、読み取りにもどる */
+function askOk(){
+  const v = $("#ask-sel") ? $("#ask-sel").value : "";
+  if(!v){ toast("えらんでください"); return; }
+  const x = ASK;
+
+  if(x.kind === "unknown"){
+    const r = DB.reqs.find(z => z.id === v); if(!r) return;
+    let it = r.itemId ? DB.items.find(z => z.id === r.itemId) : null;
+    if(!it) it = DB.items.find(z => z.shopId === r.shopId && norm(z.name) === norm(r.name));
+    if(it){ it.jan = x.code; }
+    else {
+      it = {id: uid(), shopId: r.shopId, name: r.name, price: r.plan, cat: r.cat, jan: x.code};
+      DB.items.push(it);
+    }
+    if(!r.itemId) r.itemId = it.id;
+    checked.add(r.id); save();
+    askClose();
+    bcSign(true); scanMsg(`${it.name}　おぼえました`, "ok"); bcList(r.id);
+    return;
+  }
+
+  const it = DB.items.find(z => z.id === x.itemId); if(!it) return;
+  const [kind, wid] = v.split(":");
+  const r = {id: uid(), ts: Date.now(), kind, wid: wid||"", shopId: it.shopId, itemId: it.id,
+             name: it.name, plan: it.price, qty: 1, cat: it.cat || "その他",
+             status: "reserved", actual: 0, btime: 0, staffId: "", advanced: false};
+  DB.reqs.push(r); checked.add(r.id); save();
+  askClose();
+  bcSign(true); scanMsg(`${it.name}　買うものに足しました`, "ok"); bcList(r.id);
+}
+
+function askNo(){ askClose(); scanMsg("カメラを向けてください"); bcList(); }
+
+/* 問いを閉じて、読み取りにもどる */
+function askClose(){
+  ASK = null;
+  closeSheet();
+  scanBuyResume();
 }
 
 
@@ -1782,62 +1797,9 @@ function bcCheck(hit, it){
 }
 
 /* 読んだ番号を、リストの品に結びつけて覚える */
-/* 保留のひとつを片づける — 買うものに足す */
-function bcAdd(code){
-  const h = HOLD.find(x => x.code === code); if(!h) return;
-  const it = DB.items.find(x => x.id === h.itemId); if(!it) return;
-  const sel = $(`[data-who="${code}"]`);
-  const v = sel ? sel.value : "";
-  if(!v){ toast("だれのお金で買うかえらんでください"); return; }
-  const [kind, wid] = v.split(":");
-  const r = {id: uid(), ts: Date.now(), kind, wid: wid||"", shopId: it.shopId, itemId: it.id,
-             name: it.name, plan: it.price, qty: 1, cat: it.cat || "その他",
-             status: "reserved", actual: 0, btime: 0, staffId: "", advanced: false};
-  DB.reqs.push(r);
-  HOLD = HOLD.filter(x => x.code !== code);
-  checked.add(r.id);
-  save(); bcSign(true);
-  scanMsg(`${it.name}　買うものに足しました`, "ok");
-  bcList(r.id);
-  holdAfter();
-}
 
-/* 保留のひとつを捨てる */
-function bcDrop(code){
-  HOLD = HOLD.filter(x => x.code !== code);
-  bcList();
-  holdAfter();
-}
 
-/* 片づけの画面にいるなら、描き直す。なくなったら読み取りへ戻す */
-function holdAfter(){
-  const sh = $("#sheet");
-  if(!sh || !sh.querySelector('[data-act="holdclose"]')) return;
-  if(HOLD.length) holdOpen();
-  else { closeSheet(); toast("ぜんぶ決まりました"); scanBuyResume(); }
-}
 
-function bcBind(code){
-  const sel = $(`[data-pick="${code}"]`);
-  const id = sel ? sel.value : "";
-  if(!id){ toast("どの品かえらんでください"); return; }
-  const r = DB.reqs.find(x => x.id === id); if(!r) return;
-
-  let it = r.itemId ? DB.items.find(x => x.id === r.itemId) : null;
-  if(!it) it = DB.items.find(x => x.shopId === r.shopId && norm(x.name) === norm(r.name));
-  if(it){ it.jan = code; }
-  else {
-    it = {id: uid(), shopId: r.shopId, name: r.name, price: r.plan, cat: r.cat, jan: code};
-    DB.items.push(it);
-  }
-  if(!r.itemId) r.itemId = it.id;
-  HOLD = HOLD.filter(x => x.code !== code);
-  checked.add(r.id);
-  save(); bcSign(true);
-  scanMsg(`${it.name}　おぼえました`, "ok");
-  bcList(r.id);
-  holdAfter();
-}
 
 
 /* 読み取りテスト — 何が起きているかを見る */
@@ -2268,11 +2230,8 @@ document.addEventListener("click", e => {
     case "txclose": txClose(); break;
     case "scanbuy": scanBuy(); break;
     case "scantest": scanTest(); break;
-    case "bcbind": bcBind(b.dataset.code); break;
-    case "bcadd": bcAdd(b.dataset.code); break;
-    case "bcdrop": bcDrop(b.dataset.code); break;
-    case "holdopen": holdOpen(); break;
-    case "holdclose": closeSheet(); scanBuyResume(); break;
+    case "askok": askOk(); break;
+    case "askno": askNo(); break;
     case "scup": { const el = $("#sheet"); if(el) el.scrollTo({top:0, behavior:"smooth"}); break; }
     case "scanjan": scanJan(); break;
     case "sctorch": scanTorch(); break;
