@@ -291,7 +291,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v3.4
+   おかいもの帖  v3.5
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -598,48 +598,81 @@ function modeTabs(cur){
 
 /* すんだもの — 買ったもの・買えなかったもの を日ごとに */
 function viewDone(){
-  const list = DB.reqs.filter(r => r.status !== "reserved")
-                      .sort((a, b) => (b.btime || b.ts) - (a.btime || a.ts));
+  const all = DB.reqs.filter(r => r.status !== "reserved");
   let h = modeTabs("done");
 
-  if(!list.length){
+  if(!all.length){
     h += `<div class="empty"><b>すんだ買いものはまだありません</b>買いものを確定するか「買えなかった」にすると、ここに残ります。</div>`;
     $("#v-shop").innerHTML = h; bindMode(); return;
   }
 
-  const days = {};
-  list.forEach(r => { const k = ymd(r.btime || r.ts); (days[k] = days[k] || []).push(r); });
+  /* ぜんぶ ／ こども別 ／ お店別 */
+  h += `<div class="modetabs" style="margin-bottom:8px">
+    ${[["all","ぜんぶ"],["kid","こども別"],["shop","お店別"]].map(([v,n]) =>
+      `<button data-dgrp="${v}" aria-current="${doneGrp===v}">${n}</button>`).join("")}
+  </div>`;
 
-  Object.keys(days).forEach(day => {
-    const rows = days[day];
-    const paid = rows.filter(r => r.status === "bought").reduce((a, r) => a + r.actual, 0);
-    const ng   = rows.filter(r => r.status === "canceled").length;
-    h += `<div class="card">
-      <div class="dday">${esc(day)}　<span class="muted">${rows.length}件　${yen(paid)}${ng ? `　買えなかった ${ng}件` : ""}</span></div>`;
+  const sortNew = (a, b) => (b.btime || b.ts) - (a.btime || a.ts);
+  const money = rows => rows.filter(r => r.status === "bought").reduce((a, r) => a + r.actual, 0);
+  const ng    = rows => rows.filter(r => r.status === "canceled").length;
+
+  const card = (title, sub, rows, showWho) => {
+    let x = `<div class="card">
+      <div class="dday">${esc(title)}　<span class="muted">${esc(sub)}</span></div>`;
     rows.forEach(r => {
       const cx = r.status === "canceled";
-      const plan = r.plan * r.qty, d = r.actual - plan;
-      h += `<div class="drow${cx ? " cx" : ""}" data-done="${r.id}">
+      const plan = r.plan * r.qty, df = r.actual - plan;
+      x += `<div class="drow${cx ? " cx" : ""}" data-done="${r.id}">
         <div class="grow">
           <div class="nm">${esc(r.name)}${r.qty > 1 ? ` <span class="muted">×${r.qty}</span>` : ""}</div>
           <div style="margin-top:3px">
-            <span class="tag ${r.kind==="common"?"common":"child"}">${esc(walletLabel(r.kind, r.wid))}</span>
+            ${showWho ? `<span class="tag ${r.kind==="common"?"common":"child"}">${esc(walletLabel(r.kind, r.wid))}</span>` : ""}
             <span class="tag">${esc(r.cat)}</span>
             ${r.advanced ? `<span class="tag hot">立替</span>` : ""}
           </div>
-          <div class="muted small">${esc(shopName(r.shopId))}${r.staffId ? `／${esc(walletLabel("staff", r.staffId))}` : ""}</div>
+          <div class="muted small">${ymd(r.btime || r.ts)}${doneGrp === "shop" ? "" : `／${esc(shopName(r.shopId))}`}${r.staffId ? `／${esc(walletLabel("staff", r.staffId))}` : ""}</div>
         </div>
         <div class="amt2">
           ${cx ? `<b class="muted">買えず</b>` : `<b>${yen(r.actual)}</b>
-            ${d ? `<div class="diff ${d>0?"up":"dn"}">よてい ${d>0?"+":"−"}${yen(Math.abs(d))}</div>`
-                : `<div class="muted small">よていどおり</div>`}`}
+            ${df ? `<div class="diff ${df>0?"up":"dn"}">よてい ${df>0?"+":"−"}${yen(Math.abs(df))}</div>`
+                 : `<div class="muted small">よていどおり</div>`}`}
         </div>
       </div>`;
     });
-    h += `</div>`;
-  });
+    return x + `</div>`;
+  };
+
+  if(doneGrp === "kid"){
+    const keys = [];
+    all.forEach(r => { const k = r.kind + ":" + r.wid; if(!keys.includes(k)) keys.push(k); });
+    keys.sort((a, b) => walletLabel(...a.split(":")).localeCompare(walletLabel(...b.split(":")), "ja"));
+    keys.forEach(k => {
+      const [kind, wid] = k.split(":");
+      const rows = all.filter(r => r.kind === kind && r.wid === wid).sort(sortNew);
+      h += card(walletLabel(kind, wid), `${rows.length}件　${yen(money(rows))}${ng(rows) ? `　買えなかった ${ng(rows)}件` : ""}`, rows, false);
+    });
+  } else if(doneGrp === "shop"){
+    const keys = [];
+    all.forEach(r => { if(!keys.includes(r.shopId)) keys.push(r.shopId); });
+    keys.sort((a, b) => shopName(a).localeCompare(shopName(b), "ja"));
+    keys.forEach(sid => {
+      const rows = all.filter(r => r.shopId === sid).sort(sortNew);
+      h += card(shopName(sid), `${rows.length}件　${yen(money(rows))}${ng(rows) ? `　買えなかった ${ng(rows)}件` : ""}`, rows, true);
+    });
+  } else {
+    const days = {};
+    all.slice().sort(sortNew).forEach(r => { const key = ymd(r.btime || r.ts); (days[key] = days[key] || []).push(r); });
+    Object.keys(days).forEach(day => {
+      const rows = days[day];
+      h += card(day, `${rows.length}件　${yen(money(rows))}${ng(rows) ? `　買えなかった ${ng(rows)}件` : ""}`, rows, true);
+    });
+  }
+
   $("#v-shop").innerHTML = h;
   bindMode();
+  $$("[data-dgrp]", $("#v-shop")).forEach(b => b.onclick = () => {
+    doneGrp = b.dataset.dgrp; viewShop(); window.scrollTo(0, 0);
+  });
   $$("[data-done]", $("#v-shop")).forEach(el => el.onclick = () => openDone(el.dataset.done));
 }
 
@@ -1037,7 +1070,8 @@ function applyReceipt(){
   render();
 }
 
-let shopMode = "now";   /* now = かりおさえ中 ／ done = すんだもの */
+let shopMode = "now";
+let doneGrp  = "all";   /* すんだもの: all / kid / shop */   /* now = かりおさえ中 ／ done = すんだもの */
 
 function viewShop(){
   if(shopMode === "done"){ viewDone(); return; }
@@ -1406,7 +1440,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v3.4 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v3.5 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
