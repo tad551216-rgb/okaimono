@@ -201,6 +201,24 @@ hr.sep{border:0;border-top:1px dashed var(--line);margin:16px 0}
 .haslist #sc-v{height:26vh;min-height:150px;object-fit:cover}
 #sc-v{height:22vh;min-height:130px;object-fit:cover}
 .sheet{display:flex;flex-direction:column}
+/* 中身を縮ませない（縮むと一覧が半行だけになってしまう） */
+.sheet>*{flex:0 0 auto}
+/* 消し込み中は器の高さを決めて、余った分をぜんぶ一覧にわたす */
+.sheet.scanfit{height:88vh}
+.sheet.scanfit .sclist{flex:1 1 auto;min-height:150px;max-height:none}
+.sheet.scanfit .haslist #sc-v{height:22vh;min-height:120px}
+@media(max-height:720px){
+  .sheet.scanfit{height:94vh;padding-top:10px}
+  .sheet.scanfit .haslist #sc-v{height:18vh;min-height:100px}
+  .sheet.scanfit .sclist{min-height:120px}
+}
+.schint{border:1px solid var(--line);border-radius:3px;background:var(--paper);margin-top:6px}
+.schint>summary{padding:7px 10px;cursor:pointer;list-style:none;font-size:calc(13px * var(--fs));
+  color:var(--ink-soft);font-weight:700;display:flex;justify-content:space-between}
+.schint>summary::-webkit-details-marker{display:none}
+.schint>summary::after{content:"＋";font-weight:400}
+.schint[open]>summary::after{content:"−"}
+.schint .body{padding:0 10px 9px}
 .scmsg{white-space:pre-line;font-size:calc(16px * var(--fs));font-weight:700;line-height:1.4;
   background:var(--paper);border:2px solid var(--ink);border-radius:0 0 3px 3px;border-top:0;
   padding:9px 12px;color:var(--ink)}
@@ -335,7 +353,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <script>
 "use strict";
 /* ============================================================
-   おかいもの帖  v3.7
+   おかいもの帖  v3.8
    つくる手帖 / 放課後デイ応援帖
    サーバーなし・データは端末の外に出さない
    ============================================================ */
@@ -1415,7 +1433,7 @@ function viewSet(){
   </details>
 
   <div class="card tight">
-    <div class="muted small">おかいもの帖 v3.7 ／ つくる手帖・放課後デイ応援帖<br>
+    <div class="muted small">おかいもの帖 v3.8 ／ つくる手帖・放課後デイ応援帖<br>
       通信するしくみが入っていないので、記録はこの端末から出ません。<br>
       とうろく ${DB.children.length}人・${DB.shops.length}店・${DB.items.length}品／記録 ${DB.reqs.length}件・入出金 ${DB.txns.length}件・名寄せ ${DB.alias.length}件</div>
     <div class="note">この帖は預り金の出納を記録する道具です。<b>このアプリが預り金の管理責任を代替することはありません。</b>管理規程・残高の照合・保護者への報告は、事業所の定めに従ってお願いします。</div>
@@ -1550,12 +1568,16 @@ function openScan(o){
     </div>
     <div id="sc-n" class="scmsg">カメラを向けてください</div>
     ${o.list ? `<div class="sclist" id="sc-list"></div>` : ""}
-    <div class="muted small">${o.hint||""}</div>
+    ${o.hint ? (o.list
+      ? `<details class="schint"><summary>読み取りのコツ</summary>
+           <div class="body muted small">${o.hint}<br>ライトは、対応している端末でだけ出ます。</div>
+         </details>`
+      : `<div class="muted small">${o.hint}</div>`) : ""}
     <div class="btns" style="flex-direction:column">
       <button class="btn ghost" data-act="sctorch" id="sc-torch" hidden>💡 ライト</button>
-      ${o.list ? `<div class="muted small" style="margin-top:-4px">ライトは、対応している端末でだけ出ます。</div>` : ""}
       <button class="btn ghost" data-act="scclose">閉じる</button>
     </div>`);
+  if(o.list) $("#sheet").classList.add("scanfit");
 
   FGBarcodeScanner.start($("#sc-v"),
     (text, fmt) => {
@@ -2056,7 +2078,7 @@ async function doDecrypt(){
    モーダル
    ============================================================ */
 function sheet(html){ $("#sheet").innerHTML = html; $("#veil").hidden = false; }
-function closeSheet(){ $("#veil").hidden = true; $("#sheet").innerHTML = ""; }
+function closeSheet(){ $("#veil").hidden = true; $("#sheet").className = "sheet"; $("#sheet").innerHTML = ""; }
 $("#veil").addEventListener("click", e => { if(e.target.id === "veil") closeSheet(); });
 
 function openMoney(kind, wid, dir){

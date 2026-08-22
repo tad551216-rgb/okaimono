@@ -9,7 +9,7 @@
 
 const TT_NS = 'tt:okaimono:';
 const TT_OLD = 'okaimono-3.7';   /* 旧名。次の更新のときに消して構いません */
-const CACHE = TT_NS + '3.7';
+const CACHE = TT_NS + '3.8';
 
 const ASSETS = [
   "./",
